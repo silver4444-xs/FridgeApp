@@ -1,0 +1,95 @@
+{
+	"pages": [
+		{
+			"path": "pages/home/home",
+			"style": {
+				"navigationBarTitleText": "我的冰箱",
+				"navigationBarBackgroundColor": "#06090f",
+				"navigationBarTextStyle": "white",
+				"backgroundColor": "#06090f",
+				"enablePullDownRefresh": false,
+				"app-plus": {
+					"titleNView": false
+				}
+			}
+		},
+		{
+			"path": "pages/recipes/recipes",
+			"style": {
+				"navigationBarTitleText": "智能食谱",
+				"navigationBarBackgroundColor": "#06090f",
+				"navigationBarTextStyle": "white",
+				"backgroundColor": "#06090f",
+				"enablePullDownRefresh": false,
+				"app-plus": {
+					"titleNView": false
+				}
+			}
+		},
+		{
+			"path": "pages/add/add",
+			"style": {
+				"navigationBarTitleText": "添加食材",
+				"navigationBarBackgroundColor": "#06090f",
+				"navigationBarTextStyle": "white",
+				"backgroundColor": "#06090f",
+				"enablePullDownRefresh": false,
+				"app-plus": {
+					"titleNView": false
+				}
+			}
+		},
+		{
+			"path": "pages/settings/settings",
+			"style": {
+				"navigationBarTitleText": "设置",
+				"navigationBarBackgroundColor": "#06090f",
+				"navigationBarTextStyle": "white",
+				"backgroundColor": "#06090f",
+				"enablePullDownRefresh": false,
+				"app-plus": {
+					"titleNView": false
+				}
+			}
+		}
+	],
+	"globalStyle": {
+		"navigationBarTextStyle": "white",
+		"navigationBarTitleText": "FridgeAI",
+		"navigationBarBackgroundColor": "#06090f",
+		"backgroundColor": "#06090f"
+	},
+	"tabBar": {
+		"color": "#8b949e",
+		"selectedColor": "#00d4ff",
+		"backgroundColor": "#0d1117",
+		"borderStyle": "black",
+		"list": [
+			{
+				"pagePath": "pages/home/home",
+				"text": "冰箱",
+				"iconPath": "static/icons/kitchen.png",
+				"selectedIconPath": "static/icons/kitchen-active.png"
+			},
+			{
+				"pagePath": "pages/recipes/recipes",
+				"text": "食谱",
+				"iconPath": "static/icons/menu.png",
+				"selectedIconPath": "static/icons/menu-active.png"
+			},
+			{
+				"pagePath": "pages/add/add",
+				"text": "添加",
+				"iconPath": "static/icons/add.png",
+				"selectedIconPath": "static/icons/add-active.png"
+			},
+			{
+				"pagePath": "pages/settings/settings",
+				"text": "设置",
+				"iconPath": "static/icons/settings.png",
+				"selectedIconPath": "static/icons/settings-active.png"
+			}
+		]
+	},
+	"uniIdRouter": {}
+}

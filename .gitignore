@@ -1,0 +1,22 @@
+# 敏感凭证
+.env
+
+# 死信 + 临时文件
+dead_letter/
+*.stackdump
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+
+# IDE
+.idea/
+*.swp
+*.swo
