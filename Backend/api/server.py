@@ -50,6 +50,9 @@ async def lifespan(app: FastAPI):
 
         async def _on_food_data(food_items):
             logger.info(f"[Relay->WS] Pushing {len(food_items)} items to clients")
+            # 更新全局食材快照，供 Agent context 注入
+            import api.dependencies as deps
+            deps.current_fridge_inventory = food_items
             await broadcast({
                 "type": "food_update",
                 "foodItems": food_items,
@@ -185,7 +188,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -206,7 +209,9 @@ from api.routes.recommend import router as recommend_router
 from api.routes.detail import router as detail_router
 from api.routes.search import router as search_router
 from api.routes.substitutions import router as substitutions_router
+from api.routes.chat import router as chat_router
 
+app.include_router(chat_router, prefix="/api", tags=["对话"])
 app.include_router(recommend_router, prefix="/api/recipes", tags=["推荐"])
 app.include_router(search_router, prefix="/api/recipes", tags=["搜索"])
 app.include_router(detail_router, prefix="/api/recipes", tags=["详情"])

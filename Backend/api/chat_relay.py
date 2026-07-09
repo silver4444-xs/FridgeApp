@@ -7,8 +7,10 @@ Phase 5: 流式输出 —— Agent Chat WebSocket 端点
 原代码: 无 Agent 对话 WebSocket，仅有 OneNET 数据推送 /ws/fridge
 改进后: 新增 /ws/chat，graph.astream_events(v3) 实时推送
 """
+import asyncio
 import json
 import logging
+import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
@@ -32,11 +34,18 @@ router = APIRouter()
 # ═══════════════════════════════════════════════════════════════
 
 
-async def _handle_chat_stream(ws: WebSocket, message: str, thread_id: str):
-    """核心流式处理：调用 graph.astream_events 并逐 token 推送给客户端。
+async def _handle_and_release(ws: WebSocket, message: str, thread_id: str):
+    """包装 _handle_chat_stream，完成后自动释放 _chat_busy 标记。"""
+    try:
+        await _handle_chat_stream(ws, message, thread_id)
+    finally:
+        ws._chat_busy = False
 
-    v3 astream_events 在 async 下不支持 interleave()（该方法仅 sync 可用），
-    改用原始事件迭代：on_chat_model_stream → token, on_tool_start/end → 进度。
+
+async def _handle_chat_stream(ws: WebSocket, message: str, thread_id: str):
+    """核心流式处理：调用 graph.astream_events(v2) 并逐 token 推送给客户端。
+
+    v2 返回标准 AsyncIterator，支持 anext() + asyncio.wait_for 超时控制。
 
     Args:
         ws: WebSocket 连接
@@ -54,25 +63,37 @@ async def _handle_chat_stream(ws: WebSocket, message: str, thread_id: str):
 
     config = {"configurable": {"thread_id": thread_id}}
 
+    # 获取冰箱当前食材快照，注入 Agent context
+    from api.dependencies import get_current_inventory
+    inventory = get_current_inventory()
+
     try:
-        # ── 原代码: ──
-        # result = graph.invoke({"messages": [...]}, config=config)
-        # 阻塞等待完整结果，前端 3-5 秒无反馈
-        #
-        # ── 改进后: graph.astream_events(v3) ──
-        # 原始事件迭代，token 级实时推送 + Tool call 进度可见
-        stream = await fridge_graph.astream_events(
-            {"messages": [{"role": "user", "content": message}]},
+        stream = fridge_graph.astream_events(
+            {
+                "messages": [{"role": "user", "content": message}],
+                "current_inventory": inventory,
+            },
             config=config,
-            version="v3",
+            version="v2",
         )
 
         current_tool: str | None = None
+        deadline = time.monotonic() + 60
 
-        async for event in stream:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise asyncio.TimeoutError("Agent 响应超时")
+            try:
+                event = await asyncio.wait_for(
+                    anext(stream),
+                    timeout=min(remaining, 30),
+                )
+            except StopAsyncIteration:
+                break
+
             event_type = event.get("event", "")
 
-            # ── LLM token 流 ──
             if event_type == "on_chat_model_stream":
                 chunk = event.get("data", {}).get("chunk")
                 if chunk is not None:
@@ -119,9 +140,20 @@ async def _handle_chat_stream(ws: WebSocket, message: str, thread_id: str):
                 })
                 current_tool = None
 
-        # 流结束
+            elif event_type == "on_chain_interrupt":
+                await ws.send_json({
+                    "type": "stream_interrupt",
+                    "tool": current_tool or "unknown",
+                })
+
         await ws.send_json({"type": "stream_done"})
 
+    except asyncio.TimeoutError:
+        logger.warning(f"[Chat Stream] Timeout for thread={thread_id}")
+        await ws.send_json({
+            "type": "stream_error",
+            "error": "AI 响应超时，请简化问题或稍后重试",
+        })
     except Exception as e:
         logger.error(f"[Chat Stream] Error for thread={thread_id}: {e}")
         await ws.send_json({
@@ -172,6 +204,13 @@ async def ws_chat(websocket: WebSocket):
             msg_type = data.get("type", "")
 
             if msg_type == "chat":
+                # await _handle_chat_stream(websocket, message, thread_id)
+                # 问题: 同一连接中上一条消息未处理完时，下一条阻塞
+                #   多用户场景下所有请求串行排队
+                #
+                # ── 改进后 (asyncio.create_task 并发): ──
+                # 每条消息用独立 Task 处理，不阻塞消息接收循环
+                # _chat_busy 标记防止同一连接并发重叠（保持 thread_id 对话顺序）
                 message = data.get("message", "")
                 thread_id = data.get("thread_id", "default")
                 if not message:
@@ -180,8 +219,41 @@ async def ws_chat(websocket: WebSocket):
                         "error": "message 不能为空",
                     })
                     continue
+
+                if getattr(websocket, '_chat_busy', False):
+                    await websocket.send_json({
+                        "type": "stream_error",
+                        "error": "上一条消息仍在处理中，请稍候",
+                    })
+                    continue
+
+                websocket._chat_busy = True
                 logger.info(f"[Chat WS] thread={thread_id}, msg='{message[:50]}...'")
-                await _handle_chat_stream(websocket, message, thread_id)
+                asyncio.create_task(
+                    _handle_and_release(websocket, message, thread_id)
+                )
+
+            elif msg_type == "resume":
+                thread_id = data.get("thread_id", "default")
+                decision = data.get("decision", "approve")
+                from langgraph.types import Command
+                from api.dependencies import fridge_graph
+                if fridge_graph:
+                    config = {"configurable": {"thread_id": thread_id}}
+                    try:
+                        result = await fridge_graph.ainvoke(
+                            Command(resume={"decisions": [{"type": decision}]}),
+                            config=config,
+                        )
+                        await websocket.send_json({
+                            "type": "stream_done",
+                            "reply": result["messages"][-1].content if result.get("messages") else "",
+                        })
+                    except Exception as e:
+                        await websocket.send_json({
+                            "type": "stream_error",
+                            "error": f"恢复执行失败: {str(e)}",
+                        })
 
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})

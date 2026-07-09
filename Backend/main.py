@@ -437,9 +437,7 @@ def main():
         print(f"\n❌ 系统错误: {e}")
 
 
-# ═══════════════════════════════════════════════════════════════════════════
 # Phase 1: create_agent 标准化 Agent 循环
-# ═══════════════════════════════════════════════════════════════════════════
 # 原代码 (上方 AdvancedGraphRAGSystem.ask_question_with_routing):
 #   def ask_question_with_routing(self, question, stream=False, ...):
 #       # 1. 智能路由检索
@@ -458,8 +456,6 @@ def main():
 #     find_substitutions / search_cooking_knowledge
 #   - 无需手工编排路由→检索→生成流程
 #   - 自动获得 tool-calling 错误处理、流式输出、对话持久化能力
-# ═══════════════════════════════════════════════════════════════════════════
-
 
 def create_fridge_agent(model_name: str = "deepseek-v4-flash",
                         temperature: float = 0.1,
@@ -529,7 +525,6 @@ def create_fridge_agent(model_name: str = "deepseek-v4-flash",
         checkpointer = InMemorySaver()
 
     # ── 工具选择 ──
-    # ── 原代码: ──
     # if use_context:
     #     from api.tools import FRIDGE_TOOLS_V2, FridgeContext
     #     tools = FRIDGE_TOOLS_V2; context_schema = FridgeContext
@@ -563,8 +558,6 @@ def create_fridge_agent(model_name: str = "deepseek-v4-flash",
         logger.info("FridgeAgent: Basic 模式 (V1) — 4 tools")
 
     # ── 模型初始化 ──
-    # 原代码: generation_integration.py 中 ChatOpenAI(model=..., base_url=...)
-    # 改进后: 使用 init_chat_model 统一模型初始化接口
     model = init_chat_model(
         f"openai:{model_name}",
         temperature=temperature,
@@ -574,7 +567,6 @@ def create_fridge_agent(model_name: str = "deepseek-v4-flash",
     )
 
     # ── 系统提示词 ──
-    # 原代码: ask_question_with_routing 中内联 prompt，
     #   每次手工拼接食材+问题上下文
     # 改进后 (Phase 1): 标准化 system_prompt，
     #   LLM 自主理解何时调用哪个 tool
@@ -606,7 +598,14 @@ def create_fridge_agent(model_name: str = "deepseek-v4-flash",
         "- 推荐菜谱时优先推荐匹配度高的\n"
         "- 用户说「能做什么菜」时直接调 recommend_by_fridge，不要反问用户有哪些食材\n"
         "- 当用户提到饮食偏好、忌口、过敏信息或用餐人数时，调用 save_user_preferences 保存\n"
-        "- 每次对话开始时，先调用 get_user_preferences 获取已保存的偏好"
+        "- 每次对话开始时，先调用 get_user_preferences 获取已保存的偏好\n"
+        "\n"
+        "输出格式规则:\n"
+        "- 回答简洁，每次推荐不超过 5 道菜\n"
+        "- 使用表格组织对比信息（菜名 | 食材 | 难度 | 时间）\n"
+        "- 用 --- 分隔不同主题的内容块\n"
+        "- 推荐菜谱时使用编号列表，每道菜一行简短描述\n"
+        "- 避免大段描述性文字，优先用结构化格式"
     )
 
     # ── Phase 6 Subagents 专用 system prompt ──
@@ -636,8 +635,6 @@ def create_fridge_agent(model_name: str = "deepseek-v4-flash",
         )
 
     # ── 创建 Agent ──
-    # ── 原代码 (Phase 1 / 1.3): ──
-    # 原代码: AdvancedGraphRAGSystem 中手工编排 ~300 行
     #   query_router.route_query() → generate_adaptive_answer()
     # 改进后 (Phase 1): create_agent(tools=FRIDGE_TOOLS)
     #   一行创建，LLM 自主 tool-calling
@@ -671,6 +668,9 @@ def create_fridge_agent(model_name: str = "deepseek-v4-flash",
     )
     if context_schema is not None:
         agent_kwargs["context_schema"] = context_schema
+
+    import api.dependencies as deps
+    deps.fridge_model = model
 
     agent = create_agent(
         **agent_kwargs,
@@ -770,19 +770,13 @@ def create_fridge_agent_from_rag(rag_system: "AdvancedGraphRAGSystem" = None,
     )
 
 
-# ═══════════════════════════════════════════════════════════════════════════
 # Phase 2: LangGraph StateGraph 包装
-# ═══════════════════════════════════════════════════════════════════════════
-# 原代码: 无状态，每次调用 agent.invoke() 独立执行
 #   result = agent.invoke({"messages": [...]})
 #   result = agent.invoke({"messages": [...]})  # 上一轮历史丢失
 #
-# 改进后: StateGraph + InMemorySaver 自动持久化 messages
 #   graph.invoke({...}, config={"configurable": {"thread_id": "user_abc"}})
 #   graph.invoke({...}, config={"configurable": {"thread_id": "user_abc"}})
 #   # ↑ 第二轮自动继承第一轮对话历史
-# ═══════════════════════════════════════════════════════════════════════════
-
 
 def create_fridge_graph_wrapper(rag_system: "AdvancedGraphRAGSystem" = None,
                                 model_name: str = "deepseek-v4-flash",

@@ -98,12 +98,12 @@ export default {
 	},
 	onLoad() {},
 	onShow() {},
+	methods: {
 		onRefresh() {
 			this.refreshing = true
 			requestSync()
 			setTimeout(() => { this.refreshing = false }, 800)
 		},
-	methods: {
 		calcTotalCalories() {
 			let total = 0
 			store.foods.forEach(f => { total += Math.round((f.calories || CALORIE_BY_CAT[f.cat] || 80) * f.qty) })

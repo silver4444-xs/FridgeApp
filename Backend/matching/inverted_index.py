@@ -35,11 +35,16 @@ class InvertedIndex:
 
     def fuzzy_lookup(self, fridge_names: Set[str]) -> Set[str]:
         result_ids = set()
+        unmatched = set()
         for fname in fridge_names:
             if not fname:
                 continue
-            ids = self._index.get(fname, set())
-            result_ids.update(ids)
+            ids = self._index.get(fname)
+            if ids:
+                result_ids.update(ids)
+            else:
+                unmatched.add(fname)
+        for fname in unmatched:
             for key, rids in self._index.items():
                 if fname in key or key in fname:
                     result_ids.update(rids)

@@ -22,15 +22,9 @@ from langchain.agents import AgentState
 logger = logging.getLogger(__name__)
 
 
-# ═══════════════════════════════════════════════════════════════
 # 自定义状态模型
-# ═══════════════════════════════════════════════════════════════
-# 原代码: 无状态模型，每次请求独立传递 question 参数
 #   result = rag_system.ask_question_with_routing(question, stream=False)
-# 改进后: AgentState 扩展 + InMemorySaver 自动持久化对话历史
 #   通过 thread_id 隔离多用户，支持「刚才说的那道菜」等指代
-# ═══════════════════════════════════════════════════════════════
-
 
 class FridgeAgentState(AgentState):
     """冰箱 Agent 对话状态 —— 扩展 LangChain AgentState。
@@ -45,18 +39,12 @@ class FridgeAgentState(AgentState):
     """用户饮食限制，如 ["花生过敏", "不吃辣"]"""
 
 
-# ═══════════════════════════════════════════════════════════════
 # Graph Node: Agent 推荐节点
-# ═══════════════════════════════════════════════════════════════
-# 原代码: main.py AdvancedGraphRAGSystem.ask_question_with_routing()
 #   def ask_question_with_routing(self, question, stream=False, ...):
 #       relevant_docs, analysis = self.query_router.route_query(question, ...)
 #       result = self.generation_module.generate_adaptive_answer(question, docs)
 #       return result, analysis
-# 改进后: fridge_agent (create_agent) 嵌入 StateGraph Node
 #   Agent 自主 tool-calling，StateGraph 管理对话持久化
-# ═══════════════════════════════════════════════════════════════
-
 
 def _make_recommend_node(fridge_agent):
     """创建 Agent 推荐节点——将 create_agent 实例嵌入 LangGraph Node。
@@ -68,7 +56,7 @@ def _make_recommend_node(fridge_agent):
         async node function compatible with StateGraph.add_node()
     """
 
-    async def recommend_node(state: FridgeAgentState) -> dict:
+    async def recommend_node(state: FridgeAgentState, config) -> dict:
         """Agent 推荐节点: 调用 Agent 处理用户消息，返回新的 messages。
 
         该 Node 在每次 graph.invoke() 时执行:
@@ -77,23 +65,22 @@ def _make_recommend_node(fridge_agent):
         3. Agent 处理（含 tool-calling 循环）
         4. 返回的 messages 自动持久化到 checkpointer
         """
-        # ── 原代码: 每次手工调用 ask_question_with_routing ──
-        # result, analysis = rag_system.ask_question_with_routing(
-        #     state["messages"][-1].content, stream=False)
-        # return {"answer": result}
-        # ── 改进后: Agent 自主处理，messages 自动持久化 ──
-        result = await fridge_agent.ainvoke({
-            "messages": state["messages"],
-        })
+        from api.tools import FridgeContext
+
+        user_id = config.get("configurable", {}).get("thread_id", "default")
+        result = await fridge_agent.ainvoke(
+            {"messages": state["messages"]},
+            context=FridgeContext(
+                current_inventory=state.get("current_inventory", []),
+                user_id=user_id,
+            ),
+        )
         return {"messages": result["messages"]}
 
     return recommend_node
 
 
-# ═══════════════════════════════════════════════════════════════
 # Graph 构建: 简单包装版本 (Phase 2.1 — 当前)
-# ═══════════════════════════════════════════════════════════════
-
 
 def create_fridge_graph(
     fridge_agent,
@@ -136,8 +123,6 @@ def create_fridge_graph(
         logger.info("使用 InMemorySaver (开发模式)，生产环境请使用 PostgresSaver")
 
     # ── 构建 StateGraph ──
-    # 原代码: 无图结构，每次调用独立执行
-    # 改进后: StateGraph 管理状态流转 + checkpoint 持久化
     # Phase 3.5: 注入 store 实现 Long-term Memory
     workflow = StateGraph(FridgeAgentState)
 
@@ -150,7 +135,6 @@ def create_fridge_graph(
     workflow.add_edge("recommend", END)
 
     # ── 编译 (注入 checkpointer + store 实现持久化) ──
-    # 原代码: workflow.compile(checkpointer=checkpointer)
     # Phase 3.5: 注入 store 实现 Long-term Memory (工具通过 runtime.store 读写)
     compile_kwargs = {"checkpointer": checkpointer}
     if store is not None:
@@ -162,16 +146,12 @@ def create_fridge_graph(
     return graph
 
 
-# ═══════════════════════════════════════════════════════════════
 # Graph 构建: Prompt Chaining 版本 (Phase 2.2 — 未来，已注释)
-# ═══════════════════════════════════════════════════════════════
 # 优化推荐流程: 分析食材 → 检索菜谱 → 排序推荐 → 生成回答
 # 每个步骤是独立的 LLM 调用，可单独调试和优化。
 #
 # 当前版本 (简单包装) 让 Agent 自主完成所有步骤;
 # 当需要更精细的控制和可观测性时，启用此版本。
-# ═══════════════════════════════════════════════════════════════
-
 # from typing import TypedDict
 #
 # class RecommendState(TypedDict):

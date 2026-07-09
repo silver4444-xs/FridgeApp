@@ -21,15 +21,9 @@ from langchain.tools import tool, ToolRuntime
 logger = logging.getLogger(__name__)
 
 
-# ═══════════════════════════════════════════════════════════════
 # 上下文数据模型
-# ═══════════════════════════════════════════════════════════════
-# 原代码: 冰箱食材通过 WS food_update 推送至前端 store.js
 #   store._foods → 前端 computed foods → 编辑时 uploadViaWs(store.foods)
-# 改进后: 后端 Agent 通过 ToolRuntime.context 获取当前冰箱快照，
 #   无需前端/LLM 显式传递食材列表。
-# ═══════════════════════════════════════════════════════════════
-
 
 @dataclass
 class FridgeContext:
@@ -38,7 +32,6 @@ class FridgeContext:
     通过 agent.invoke(..., context=FridgeContext(...)) 传入，
     工具函数内通过 runtime.context 访问。
     """
-    # ── 原字段 (Phase 1.3): ──
     # current_inventory: List[dict]
     # user_preferences: dict
     #
@@ -55,15 +48,9 @@ class FridgeContext:
     """用户标识，用于 Store namespace 隔离。生产环境应从请求上下文注入。"""
 
 
-# ═══════════════════════════════════════════════════════════════
 # Tool 0: 获取冰箱当前食材 (ToolRuntime 上下文注入)
-# ═══════════════════════════════════════════════════════════════
-# 原代码: 前端 store.foods 通过 WS cloudSync.uploadViaWs() 上传
 #   后端 relay._last_value 存储最新管道格式快照
-# 改进后: 后端 Agent 通过 runtime.context.current_inventory 直接读取，
 #   省去 LLM 显式传参环节。用户问「能做什么菜」时无需罗列食材。
-# ═══════════════════════════════════════════════════════════════
-
 @tool
 def get_fridge_inventory(runtime: ToolRuntime[FridgeContext]) -> str:
     """获取冰箱当前存放的全部食材清单。包含食材名称、数量、分类和卡路里。
@@ -76,7 +63,6 @@ def get_fridge_inventory(runtime: ToolRuntime[FridgeContext]) -> str:
     Returns:
         JSON格式的冰箱食材清单
     """
-    # ── 原代码: store.js mergeCloudFoods() ──
     # store.mergeCloudFoods(cloudFoods)
     #   → translateFoodName(cf.name)  # EN→ZH 翻译
     #   → classifyFood(cf.name).cat   # 自动分类
@@ -115,7 +101,6 @@ def get_fridge_inventory(runtime: ToolRuntime[FridgeContext]) -> str:
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-# ── Tool 0 (旧版, 无可用的 runtime 时回退) ──
 # @tool
 # def get_fridge_inventory() -> str:
 #     """获取冰箱当前食材清单。"""
@@ -125,11 +110,7 @@ def get_fridge_inventory(runtime: ToolRuntime[FridgeContext]) -> str:
 #         return json.dumps({"status": "empty", "message": "冰箱暂未同步数据"})
 #     items = parse_compact_inventory(relay._last_value)
 #     return json.dumps(items, ensure_ascii=False, indent=2)
-# 原逻辑位于 api/routes/recommend.py:recommend()
 #   倒排索引查找 → 模糊匹配 → 排序 → 返回
-# 改造后：包装为 @tool，LLM 可主动调用
-# ═══════════════════════════════════════════════════════════════
-
 @tool
 def search_recipes_by_ingredients(ingredients: List[str], limit: int = 5) -> str:
     """根据冰箱现有食材搜索可制作的菜谱。返回匹配的菜谱列表，包含菜名、匹配食材数、难度和时间。
@@ -141,7 +122,6 @@ def search_recipes_by_ingredients(ingredients: List[str], limit: int = 5) -> str
     Returns:
         JSON格式的匹配菜谱列表
     """
-    # ── 原代码: api/routes/recommend.py ──
     # @router.post("/recommend", response_model=RecommendResponse)
     # def recommend(req: RecommendRequest, db=..., idx=...):
     #     fridge_names = FuzzyMatcher.normalize_fridge_items(
@@ -156,8 +136,6 @@ def search_recipes_by_ingredients(ingredients: List[str], limit: int = 5) -> str
     from matching.fuzzy_matcher import FuzzyMatcher
 
     # Fix #4: 食材名归一化时保留分类信息
-    # 原有逻辑: 全部食材标为 "packaged"，丢失分类信息 → 模糊匹配精度下降
-    # 修复后: 尝试通过中文名反查分类 (fallback 到 "packaged")
     _CN_CAT_MAP = {
         '水果': 'fruit', '蔬菜': 'vegetable', '肉蛋生鲜类': 'meat_egg',
         '饮料乳品类': 'beverage_dairy', '包装食品类': 'packaged',
@@ -218,14 +196,8 @@ def search_recipes_by_ingredients(ingredients: List[str], limit: int = 5) -> str
     return json.dumps(results, ensure_ascii=False, indent=2)
 
 
-# ═══════════════════════════════════════════════════════════════
 # Tool 2: 获取菜谱详情
-# ═══════════════════════════════════════════════════════════════
-# 原逻辑位于 api/routes/detail.py:get_recipe()
 #   recipe_db.get(recipe_id) → RecipeDetail Pydantic 模型
-# 改造后：包装为 @tool，LLM 在需要详情时调用
-# ═══════════════════════════════════════════════════════════════
-
 @tool
 def get_recipe_detail(recipe_id: str) -> str:
     """获取指定菜谱的完整详情，包括食材清单、制作步骤和小贴士。
@@ -237,7 +209,6 @@ def get_recipe_detail(recipe_id: str) -> str:
     Returns:
         JSON格式的菜谱详细信息
     """
-    # ── 原代码: api/routes/detail.py ──
     # @router.get("/{recipe_id}", response_model=RecipeDetail)
     # def get_recipe(recipe_id: str, db=...):
     #     recipe = db.get(recipe_id)
@@ -268,14 +239,8 @@ def get_recipe_detail(recipe_id: str) -> str:
     return json.dumps(detail, ensure_ascii=False, indent=2)
 
 
-# ═══════════════════════════════════════════════════════════════
 # Tool 3: 食材替换建议
-# ═══════════════════════════════════════════════════════════════
-# 原逻辑位于 api/routes/substitutions.py:suggest()
 #   LLM prompt → generation_module.generate_adaptive_answer()
-# 改造后：包装为 @tool，LLM Agent 可自主触发替换查询
-# ═══════════════════════════════════════════════════════════════
-
 @tool
 def find_substitutions(ingredient_name: str) -> str:
     """查找某食材的替代品建议。当冰箱缺少某食材时，可查询替代方案。
@@ -286,7 +251,6 @@ def find_substitutions(ingredient_name: str) -> str:
     Returns:
         JSON格式的替代品建议
     """
-    # ── 原代码: api/routes/substitutions.py ──
     # @router.post("/{recipe_id}/suggest-substitutions")
     # def suggest(recipe_id, req, db=...):
     #     prompt = f"你是一位专业厨师。用户想做{recipe['name']}..."
@@ -298,9 +262,10 @@ def find_substitutions(ingredient_name: str) -> str:
     # 与 Agent 主模型不同，可能导致回答风格不一致。
     # 未来改进: 将 Agent 模型通过 runtime.context 注入，或使用 ToolRuntime.store 缓存结果。
 
-    from api.dependencies import rag_system
+    from api.dependencies import fridge_model
+    from langchain_core.messages import HumanMessage
 
-    if not rag_system or not rag_system.generation_module:
+    if fridge_model is None:
         return json.dumps({
             "ingredient": ingredient_name,
             "suggestions": [f"{ingredient_name} 可在超市购买或尝试省略"],
@@ -313,9 +278,8 @@ def find_substitutions(ingredient_name: str) -> str:
     )
 
     try:
-        response = rag_system.generation_module.generate_adaptive_answer(
-            prompt, []
-        )
+        response_msg = fridge_model.invoke([HumanMessage(content=prompt)])
+        response = response_msg.content
         return json.dumps({
             "ingredient": ingredient_name,
             "suggestions": response,
@@ -327,14 +291,8 @@ def find_substitutions(ingredient_name: str) -> str:
         }, ensure_ascii=False)
 
 
-# ═══════════════════════════════════════════════════════════════
 # Tool 4: 烹饪知识 RAG 检索
-# ═══════════════════════════════════════════════════════════════
-# 原逻辑位于 main.py:AdvancedGraphRAGSystem.ask_question_with_routing()
 #   智能路由 → 混合检索(HybridRetrieval + GraphRAG) → LLM 生成回答
-# 改造后：包装为 @tool，Agent 可将其作为知识检索工具调用
-# ═══════════════════════════════════════════════════════════════
-
 @tool
 def search_cooking_knowledge(question: str) -> str:
     """搜索烹饪知识库（RAG混合检索 + 图RAG），回答烹饪技巧、菜品知识等开放性问题。
@@ -346,7 +304,6 @@ def search_cooking_knowledge(question: str) -> str:
     Returns:
         基于知识库的综合回答
     """
-    # ── 原代码: main.py:AdvancedGraphRAGSystem.ask_question_with_routing ──
     # def ask_question_with_routing(self, question, stream=False, explain_routing=False):
     #     # 1. 智能路由检索
     #     relevant_docs, analysis = self.query_router.route_query(question, self.config.top_k)
@@ -374,13 +331,9 @@ def search_cooking_knowledge(question: str) -> str:
         }, ensure_ascii=False)
 
 
-# ═══════════════════════════════════════════════════════════════
 # Tool 5: 基于冰箱上下文的智能推荐 (ToolRuntime 核心用例)
-# ═══════════════════════════════════════════════════════════════
 # 这是 Phase 1.3 的核心工具 —— 利用 ToolRuntime 自动获取冰箱食材，
 # 用户只需说「能做什么菜」无需罗列食材，Agent 自动从上下文提取。
-# ═══════════════════════════════════════════════════════════════
-
 @tool
 def recommend_by_fridge(
     runtime: ToolRuntime[FridgeContext],
@@ -399,7 +352,6 @@ def recommend_by_fridge(
     Returns:
         JSON格式的推荐结果，含菜谱列表和匹配统计
     """
-    # ── 原代码: 前端 recipes.vue fetchRecommend() ──
     # async fetchRecommend() {
     #     const ingredients = store.foods.map(f => ({name: f.name, cat: f.cat, ...}))
     #     const res = await uni.request({
@@ -408,7 +360,6 @@ def recommend_by_fridge(
     #     })
     #     this.recommendRecipes = res.data.recipes
     # }
-    # ── 原代码: api/routes/recommend.py:recommend() ──
     # fridge_names = FuzzyMatcher.normalize_fridge_items(
     #     [{"name": ing.name, "cat": ing.cat} for ing in req.ingredients])
     # candidate_ids = idx.fuzzy_lookup(fridge_names)
@@ -500,17 +451,11 @@ def recommend_by_fridge(
     }, ensure_ascii=False, indent=2)
 
 
-# ═══════════════════════════════════════════════════════════════
 # Long-term Memory 工具 (Phase 3.5: InMemoryStore)
-# ═══════════════════════════════════════════════════════════════
-# 原代码: 用户偏好仅通过 FridgeContext.user_preferences 在单次调用中传递
 #   每次新对话用户需重新声明忌口/偏好菜系
-# 改进后: 通过 runtime.store 持久化偏好，跨会话自动继承
 #   - save_user_preferences: Agent 检测到用户声明的偏好时自动保存
 #   - get_user_preferences: 每次对话开始时自动读取历史偏好
 # Store 模式: namespace=("preferences",), key=user_id, value=dict
-# ═══════════════════════════════════════════════════════════════
-
 @tool
 def save_user_preferences(
     preferences: dict,
@@ -530,7 +475,6 @@ def save_user_preferences(
     Returns:
         JSON 格式的保存确认
     """
-    # ── 原代码: 无长期记忆，偏好仅在 FridgeContext.user_preferences 中 ──
     # agent.invoke(..., context=FridgeContext(
     #     current_inventory=[...],
     #     user_preferences={"忌口":["花生"]},  # 每次调用都需显式传入
@@ -568,7 +512,6 @@ def get_user_preferences(
     Returns:
         JSON 格式的用户偏好，首次使用返回空
     """
-    # ── 原代码: 无长期记忆 ──
     # 偏好来源: runtime.context.user_preferences (单次调用有效)
     # ── 改进后: runtime.store 跨会话读取 ──
     store = runtime.store
@@ -596,10 +539,7 @@ def get_user_preferences(
     }, ensure_ascii=False)
 
 
-# ═══════════════════════════════════════════════════════════════
 # 工具列表汇总（供 create_agent 使用）
-# ═══════════════════════════════════════════════════════════════
-
 FRIDGE_TOOLS = [
     search_recipes_by_ingredients,
     get_recipe_detail,

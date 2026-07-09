@@ -1,274 +1,86 @@
 <template>
 	<view class="page-shell">
-		<view class="page">
+		<scroll-view class="page" scroll-y>
 			<!-- Header -->
 			<view class="recipe-header">
 				<text class="recipe-title">智能食谱</text>
-				<text class="recipe-sub">基于冰箱食材，为你推荐能做的美味</text>
+				<text class="recipe-sub">基于冰箱食材，AI 为你推荐能做的美味</text>
 			</view>
 
-			<!-- ===== Module 1: 冰箱食材统计信息 ===== -->
-			<view class="module module-stats">
-				<!-- Corner brackets -->
-				<view class="corner corner-tl"></view>
-				<view class="corner corner-tr"></view>
-				<view class="corner corner-bl"></view>
-				<view class="corner corner-br"></view>
-				<!-- Scan line -->
-				<view class="stats-scanline"></view>
-				<!-- Data particles -->
-				<view class="particle p1"></view>
-				<view class="particle p2"></view>
-				<view class="particle p3"></view>
-
-				<view class="module-header stats-header">
-					<view class="stats-header-icon">
-						<text class="material-icons module-icon">memory</text>
-						<view class="pulse-ring"></view>
+			<!-- Compact Stats Bar -->
+			<view class="stats-bar">
+				<view class="stat-card">
+					<view class="stat-icon-box icon-food">
+						<text class="material-icons">restaurant</text>
 					</view>
-					<view>
-						<view class="stats-title-row">
-							<text class="module-title">冰箱食材统计</text>
-							<view class="live-badge">
-								<view class="live-dot"></view>
-								<text>实时</text>
-							</view>
-						</view>
-						<text class="module-desc">当前冰箱库存智能监控面板</text>
-					</view>
-				</view>
-
-				<view class="stats-row">
-					<view class="stat-item">
-						<view class="stat-ring ring-cyan">
-							<view class="ring-inner">
-								<text class="stat-value stat-gradient-cyan">{{ totalFoods }}</text>
-								<text class="stat-unit">种</text>
-							</view>
-						</view>
+					<view class="stat-body">
+						<text class="stat-value">{{ totalFoods }}</text>
 						<text class="stat-label">食材种类</text>
 					</view>
-					<view class="stat-item">
-						<view class="stat-ring ring-purple">
-							<view class="ring-inner">
-								<text class="stat-value stat-gradient-purple">{{ matchedRecipes.length }}</text>
-								<text class="stat-unit">道</text>
-							</view>
-						</view>
+				</view>
+				<view class="stat-card">
+					<view class="stat-icon-box icon-cook">
+						<text class="material-icons">menu_book</text>
+					</view>
+					<view class="stat-body">
+						<text class="stat-value highlight">{{ matchedRecipes.length }}</text>
 						<text class="stat-label">可做菜谱</text>
 					</view>
-					<view class="stat-item">
-						<view class="stat-ring ring-green">
-							<view class="ring-inner">
-								<text class="stat-value stat-gradient-green">{{ matchPercent }}</text>
-								<text class="stat-unit">%</text>
-							</view>
-						</view>
+				</view>
+				<view class="stat-card">
+					<view class="stat-icon-box icon-rate">
+						<text class="material-icons">trending_up</text>
+					</view>
+					<view class="stat-body">
+						<text class="stat-value green">{{ matchPercent }}%</text>
 						<text class="stat-label">覆盖率</text>
 					</view>
 				</view>
+			</view>
 
-				<!-- Data bars -->
-				<view class="stats-bars">
-					<view class="data-bar-row">
-						<text class="data-bar-label">食材库存</text>
-						<view class="data-bar-track">
-							<view class="data-bar-fill bar-cyan" :style="{width: Math.min(totalFoods / 20 * 100, 100) + '%'}"></view>
-						</view>
-					</view>
-					<view class="data-bar-row">
-						<text class="data-bar-label">菜谱匹配</text>
-						<view class="data-bar-track">
-							<view class="data-bar-fill bar-purple" :style="{width: Math.min(matchedRecipes.length / Math.max(allRecipes.length, 1) * 100, 100) + '%'}"></view>
-						</view>
-					</view>
-					<view class="data-bar-row">
-						<text class="data-bar-label">综合覆盖</text>
-						<view class="data-bar-track">
-							<view class="data-bar-fill bar-green" :style="{width: matchPercent + '%'}"></view>
-						</view>
-					</view>
+			<!-- Tab Bar -->
+			<view class="tab-bar">
+				<view
+					v-for="tab in tabs"
+					:key="tab.key"
+					class="tab-item"
+					:class="{ active: activeTab === tab.key }"
+					@click="switchTab(tab.key)"
+				>
+					<text class="material-icons tab-icon">{{ tab.icon }}</text>
+					<text class="tab-label">{{ tab.label }}</text>
 				</view>
 			</view>
 
-			<!-- ===== Module 2: 搜索菜谱 ===== -->
-			<view class="module">
-				<view class="module-header">
-					<text class="material-icons module-icon">search</text>
-					<view>
-						<text class="module-title">搜索菜谱</text>
-						<text class="module-desc">按菜名搜索，查看详细做法</text>
-					</view>
-				</view>
-
-				<view class="search-row">
-					<view class="search-input-box">
-						<text class="material-icons search-input-icon">search</text>
-						<input
-							v-model="searchQuery"
-							class="search-input-field"
-							placeholder="输入菜名（如 红烧肉、宫保鸡丁）"
-							confirm-type="search"
-							@confirm="searchRecipes"
-						/>
-					</view>
-					<view class="action-btn" @click="searchRecipes">
-						<text>搜索</text>
-					</view>
-				</view>
-
-				<!-- Search Loading -->
-				<view v-if="searchLoading" class="loading-state">
-					<text class="material-icons loading-icon">hourglass_top</text>
-					<text class="loading-text">搜索中...</text>
-				</view>
-
-				<!-- Search Results -->
-				<view v-if="!searchLoading && searchPerformed && searchResults.length > 0" class="recipe-list">
-					<view
-						v-for="r in searchResults"
-						:key="r.id"
-						class="recipe-card-v"
-						@click="openSearchResult(r)"
-					>
-						<image :src="r.image || fallbackImg" mode="aspectFill" class="recipe-img-v" />
-						<view class="recipe-card-v-body">
-							<view class="recipe-card-v-top">
-								<text class="recipe-name-v">{{ r.name }}</text>
-								<view class="recipe-cat-tag">
-									<text>{{ r.category || '其他' }}</text>
-								</view>
-							</view>
-							<view class="recipe-card-v-bottom">
-								<view class="recipe-stat">
-									<text class="material-icons" style="font-size:13px;color:var(--text-muted);">speed</text>
-									<text>{{ r.difficulty || '未知' }}</text>
-								</view>
-							</view>
-						</view>
-					</view>
-				</view>
-
-				<view v-if="!searchLoading && searchPerformed && searchResults.length === 0" class="empty-state">
-					<text class="material-icons empty-icon">search_off</text>
-					<text class="empty-text">未找到相关菜谱</text>
-					<text class="empty-hint">试试其他关键词</text>
-				</view>
-			</view>
-
-			<!-- ===== Module 3: 搜索食材 ===== -->
-			<view class="module">
-				<view class="module-header">
-					<text class="material-icons module-icon">auto_awesome</text>
-					<view>
-						<text class="module-title">搜索食材</text>
-						<text class="module-desc">输入你想用的食材，智能推荐可做菜谱</text>
-					</view>
-				</view>
-
-				<view class="search-row">
-					<view class="search-input-box">
-						<text class="material-icons search-input-icon">restaurant</text>
-						<input
-							v-model="ingredientQuery"
-							class="search-input-field"
-							placeholder="输入食材，逗号分隔（如 鸡胸肉, 西红柿）"
-							confirm-type="search"
-							@confirm="fetchIngredientSearch"
-						/>
-					</view>
-					<view class="action-btn" @click="fetchIngredientSearch">
-						<text class="material-icons" style="font-size:14px;">auto_awesome</text>
-						<text>推荐</text>
-					</view>
-				</view>
-
-				<!-- Ingredient Search Loading -->
-				<view v-if="ingredientLoading" class="loading-state">
-					<text class="material-icons loading-icon">hourglass_top</text>
-					<text class="loading-text">AI 正在匹配菜谱...</text>
-				</view>
-
-				<!-- Ingredient Search Results -->
-				<view v-if="!ingredientLoading && ingredientSearched && ingredientResults.length > 0" class="recipe-list">
-					<view
-						v-for="r in ingredientResults"
-						:key="r.id"
-						class="recipe-card-v"
-						@click="openRecipe(r)"
-					>
-						<image :src="r.image" mode="aspectFill" class="recipe-img-v" />
-						<view class="recipe-card-v-body">
-							<view class="recipe-card-v-top">
-								<text class="recipe-name-v">{{ r.name }}</text>
-								<view class="match-badge-v" :class="getMatchLevel(r)">
-									<text>{{ r.matchCount }}/{{ r.ingredients.length }} 种</text>
-								</view>
-							</view>
-							<view class="recipe-ingredients">
-								<text
-									v-for="ing in r.ingredients"
-									:key="ing"
-									class="ing-tag"
-									:class="{ owned: isIngredientOwnedInRecipe(r, ing) }"
-								>{{ ing }}</text>
-							</view>
-							<view class="recipe-card-v-bottom">
-								<view class="recipe-stat">
-									<text class="material-icons" style="font-size:13px;color:var(--text-muted);">schedule</text>
-									<text>{{ r.time }}</text>
-								</view>
-								<view class="recipe-stat">
-									<text class="material-icons" style="font-size:13px;color:var(--text-muted);">speed</text>
-									<text>{{ r.difficulty }}</text>
-								</view>
-							</view>
-						</view>
-					</view>
-				</view>
-
-				<view v-if="!ingredientLoading && ingredientSearched && ingredientResults.length === 0" class="empty-state">
-					<text class="material-icons empty-icon">search_off</text>
-					<text class="empty-text">未找到匹配的菜谱</text>
-					<text class="empty-hint">试试调整食材组合</text>
-				</view>
-			</view>
-
-			<!-- ===== Module 4: AI 冰箱推荐 ===== -->
-			<view class="module">
-				<view class="module-header">
-					<text class="material-icons module-icon">stars</text>
-					<view>
-						<text class="module-title">AI 冰箱推荐</text>
-						<text class="module-desc">根据冰箱现有食材，智能推荐最佳匹配菜谱</text>
-					</view>
-				</view>
-
+			<!-- ===== Tab 1: AI 推荐 ===== -->
+			<view v-show="activeTab === 'recommend'">
+				<!-- Loading -->
 				<view v-if="loading" class="loading-state">
-					<text class="material-icons loading-icon">hourglass_top</text>
+					<view class="loading-spinner"></view>
 					<text class="loading-text">AI 正在分析冰箱食材...</text>
 				</view>
 
-				<view v-if="!loading && topMatches.length > 0" class="recipe-h-scroll-wrap">
-					<scroll-view scroll-x class="recipe-h-scroll" :show-scrollbar="false">
+				<!-- Top Matches Horizontal Scroll -->
+				<view v-if="!loading && topMatches.length > 0" class="section">
+					<text class="section-title">最佳匹配</text>
+					<scroll-view scroll-x class="h-scroll" :show-scrollbar="false">
 						<view
 							v-for="recipe in topMatches"
 							:key="recipe.id"
-							class="recipe-card-h"
+							class="card-h"
 							@click="openRecipe(recipe)"
 						>
-							<image :src="recipe.image" mode="aspectFill" class="recipe-img-h" />
-							<view class="recipe-card-h-overlay">
-								<view class="match-badge-h" :class="getMatchLevel(recipe)">
-									<text>{{ recipe.matchCount }}/{{ recipe.ingredients.length }} 种</text>
+							<view class="card-h-img-wrap">
+								<image :src="recipe.image" mode="aspectFill" class="card-h-img" />
+								<view class="card-h-badge" :class="getMatchLevel(recipe)">
+									<text>{{ recipe.matchCount }}/{{ recipe.ingredients.length }}种</text>
 								</view>
 							</view>
-							<view class="recipe-card-h-body">
-								<text class="recipe-name-h">{{ recipe.name }}</text>
-								<view class="recipe-meta-h">
-									<text class="material-icons" style="font-size:12px;color:var(--text-muted);">schedule</text>
-									<text>{{ recipe.time }}</text>
-									<text class="recipe-dot">·</text>
+							<view class="card-h-body">
+								<text class="card-h-name">{{ recipe.name }}</text>
+								<view class="card-h-meta">
+									<text>⏱ {{ recipe.time }}</text>
+									<text class="meta-sep">·</text>
 									<text>{{ recipe.difficulty }}</text>
 								</view>
 							</view>
@@ -276,6 +88,40 @@
 					</scroll-view>
 				</view>
 
+				<!-- More Matches Grid -->
+				<view v-if="!loading && moreMatches.length > 0" class="section">
+					<text class="section-title">更多推荐</text>
+					<view class="recipe-grid">
+						<view
+							v-for="recipe in moreMatches"
+							:key="recipe.id"
+							class="card-v"
+							@click="openRecipe(recipe)"
+						>
+							<image :src="recipe.image" mode="aspectFill" class="card-v-img" />
+							<view class="card-v-body">
+								<text class="card-v-name">{{ recipe.name }}</text>
+								<view class="card-v-ingredients">
+									<text
+										v-for="ing in recipe.ingredients.slice(0, 4)"
+										:key="ing"
+										class="ing-chip"
+										:class="{ owned: isIngredientOwnedInRecipe(recipe, ing) }"
+									>{{ ing }}</text>
+									<text v-if="recipe.ingredients.length > 4" class="ing-more">+{{ recipe.ingredients.length - 4 }}</text>
+								</view>
+								<view class="card-v-footer">
+									<view class="match-tag" :class="getMatchLevel(recipe)">
+										<text>{{ recipe.matchCount }}/{{ recipe.ingredients.length }} 种</text>
+									</view>
+									<text class="card-v-time">{{ recipe.time }}</text>
+								</view>
+							</view>
+						</view>
+					</view>
+				</view>
+
+				<!-- Empty State -->
 				<view v-if="!loading && topMatches.length === 0" class="empty-state">
 					<text class="material-icons empty-icon">kitchen</text>
 					<text class="empty-text">冰箱里还没有食材</text>
@@ -283,16 +129,121 @@
 				</view>
 			</view>
 
-			<!-- ===== Module 5: 食谱列表 ===== -->
-			<view class="module">
-				<view class="module-header">
-					<text class="material-icons module-icon">restaurant_menu</text>
-					<view>
-						<text class="module-title">食谱列表</text>
-						<text class="module-desc">{{ activeTag ? activeTag + ' · ' : '' }}共 {{ filteredRecipes.length }} 道可做菜谱</text>
+			<!-- ===== Tab 2: 搜索食谱 ===== -->
+			<view v-show="activeTab === 'search'">
+				<!-- Search Mode Toggle -->
+				<view class="search-mode-row">
+					<view
+						class="mode-chip"
+						:class="{ active: searchMode === 'name' }"
+						@click="searchMode = 'name'"
+					><text>按菜名</text></view>
+					<view
+						class="mode-chip"
+						:class="{ active: searchMode === 'ingredient' }"
+						@click="searchMode = 'ingredient'"
+					><text>按食材</text></view>
+				</view>
+
+				<!-- Search by Name -->
+				<view v-if="searchMode === 'name'" class="search-box">
+					<view class="search-input-row">
+						<text class="material-icons search-icon">search</text>
+						<input
+							v-model="searchQuery"
+							class="search-field"
+							placeholder="输入菜名，如 红烧肉、宫保鸡丁"
+							confirm-type="search"
+							@confirm="searchRecipes"
+						/>
+						<view class="search-btn" @click="searchRecipes">
+							<text>搜索</text>
+						</view>
 					</view>
 				</view>
 
+				<!-- Search by Ingredients -->
+				<view v-if="searchMode === 'ingredient'" class="search-box">
+					<view class="search-input-row">
+						<text class="material-icons search-icon">auto_awesome</text>
+						<input
+							v-model="ingredientQuery"
+							class="search-field"
+							placeholder="输入食材，逗号分隔（如 鸡胸肉, 西红柿）"
+							confirm-type="search"
+							@confirm="fetchIngredientSearch"
+						/>
+						<view class="search-btn accent" @click="fetchIngredientSearch">
+							<text>推荐</text>
+						</view>
+					</view>
+				</view>
+
+				<!-- Search Loading -->
+				<view v-if="searchLoading || ingredientLoading" class="loading-state">
+					<view class="loading-spinner"></view>
+					<text class="loading-text">{{ searchLoading ? '搜索中...' : 'AI 正在匹配菜谱...' }}</text>
+				</view>
+
+				<!-- Search Results (by name) -->
+				<view v-if="!searchLoading && searchPerformed && searchMode === 'name'" class="recipe-grid">
+					<view
+						v-for="r in searchResults"
+						:key="r.id"
+						class="card-v"
+						@click="openSearchResult(r)"
+					>
+						<image :src="r.image || fallbackImg" mode="aspectFill" class="card-v-img" />
+						<view class="card-v-body">
+							<text class="card-v-name">{{ r.name }}</text>
+							<view class="card-v-footer">
+								<view class="cat-tag"><text>{{ r.category || '其他' }}</text></view>
+								<text class="card-v-time">{{ r.difficulty || '未知' }}</text>
+							</view>
+						</view>
+					</view>
+				</view>
+
+				<!-- Search Results (by ingredient) -->
+				<view v-if="!ingredientLoading && ingredientSearched && searchMode === 'ingredient'" class="recipe-grid">
+					<view
+						v-for="r in ingredientResults"
+						:key="r.id"
+						class="card-v"
+						@click="openRecipe(r)"
+					>
+						<image :src="r.image" mode="aspectFill" class="card-v-img" />
+						<view class="card-v-body">
+							<text class="card-v-name">{{ r.name }}</text>
+							<view class="card-v-ingredients">
+								<text
+									v-for="ing in r.ingredients.slice(0, 4)"
+									:key="ing"
+									class="ing-chip"
+									:class="{ owned: isIngredientOwnedInRecipe(r, ing) }"
+								>{{ ing }}</text>
+								<text v-if="r.ingredients.length > 4" class="ing-more">+{{ r.ingredients.length - 4 }}</text>
+							</view>
+							<view class="card-v-footer">
+								<view class="match-tag" :class="getMatchLevel(r)">
+									<text>{{ r.matchCount }}/{{ r.ingredients.length }} 种</text>
+								</view>
+								<text class="card-v-time">{{ r.time }}</text>
+							</view>
+						</view>
+					</view>
+				</view>
+
+				<!-- Empty Search State -->
+				<view v-if="!searchLoading && !ingredientLoading && ((searchMode === 'name' && searchPerformed && searchResults.length === 0) || (searchMode === 'ingredient' && ingredientSearched && ingredientResults.length === 0))" class="empty-state">
+					<text class="material-icons empty-icon">search_off</text>
+					<text class="empty-text">未找到匹配的菜谱</text>
+					<text class="empty-hint">试试其他关键词</text>
+				</view>
+			</view>
+
+			<!-- ===== Tab 3: 全部食谱 ===== -->
+			<view v-show="activeTab === 'all'">
 				<!-- Tag Filters -->
 				<scroll-view v-if="availableTags.length > 0" scroll-x class="tag-scroll" :show-scrollbar="false">
 					<view
@@ -306,197 +257,65 @@
 					</view>
 				</scroll-view>
 
-				<view v-if="!loading && filteredRecipes.length > 0" class="recipe-list">
+				<!-- Recipe Grid -->
+				<view v-if="!loading && filteredRecipes.length > 0" class="recipe-grid">
 					<view
 						v-for="recipe in filteredRecipes"
 						:key="recipe.id"
-						class="recipe-card-v"
+						class="card-v"
 						@click="openRecipe(recipe)"
 					>
-						<image :src="recipe.image" mode="aspectFill" class="recipe-img-v" />
-						<view class="recipe-card-v-body">
-							<view class="recipe-card-v-top">
-								<text class="recipe-name-v">{{ recipe.name }}</text>
-								<view class="match-badge-v" :class="getMatchLevel(recipe)">
-									<text>{{ recipe.matchCount }}/{{ recipe.ingredients.length }} 种</text>
-								</view>
-							</view>
-							<view class="recipe-ingredients">
+						<image :src="recipe.image" mode="aspectFill" class="card-v-img" />
+						<view class="card-v-body">
+							<text class="card-v-name">{{ recipe.name }}</text>
+							<view class="card-v-ingredients">
 								<text
-									v-for="ing in recipe.ingredients"
+									v-for="ing in recipe.ingredients.slice(0, 4)"
 									:key="ing"
-									class="ing-tag"
+									class="ing-chip"
 									:class="{ owned: isIngredientOwnedInRecipe(recipe, ing) }"
 								>{{ ing }}</text>
+								<text v-if="recipe.ingredients.length > 4" class="ing-more">+{{ recipe.ingredients.length - 4 }}</text>
 							</view>
-							<view class="recipe-card-v-bottom">
-								<view class="recipe-stat">
-									<text class="material-icons" style="font-size:13px;color:var(--text-muted);">schedule</text>
+							<view class="card-v-footer">
+								<view class="match-tag" :class="getMatchLevel(recipe)">
+									<text>{{ recipe.matchCount }}/{{ recipe.ingredients.length }} 种</text>
+								</view>
+								<view class="card-v-meta">
 									<text>{{ recipe.time }}</text>
-								</view>
-								<view class="recipe-stat">
-									<text class="material-icons" style="font-size:13px;color:var(--text-muted);">restaurant</text>
+									<text class="meta-sep">·</text>
 									<text>{{ recipe.difficulty }}</text>
-								</view>
-								<view class="recipe-stat">
-									<text class="material-icons" style="font-size:13px;color:var(--text-muted);">local_fire_department</text>
-									<text>{{ recipe.calories }}</text>
 								</view>
 							</view>
 						</view>
 					</view>
 				</view>
 
+				<!-- Empty -->
 				<view v-if="!loading && filteredRecipes.length === 0" class="empty-state">
 					<text class="material-icons empty-icon">search_off</text>
 					<text class="empty-text">没有匹配的食谱</text>
 					<text class="empty-hint">试试添加更多食材到冰箱</text>
 				</view>
 			</view>
-		</view>
 
-		<!-- ============ Recipe Detail Modal ============ -->
-		<view v-if="activeRecipe" class="modal-overlay" @click="closeRecipe">
-			<view class="modal-sheet" @click.stop>
-				<image v-if="activeRecipe.image" :src="activeRecipe.image" mode="aspectFill" class="modal-img" />
-
-				<view class="modal-header">
-					<view class="modal-title-row">
-						<text class="modal-name">{{ activeRecipe.name }}</text>
-						<view
-							v-if="!activeRecipe.ownedIngredients || activeRecipe.ownedIngredients.length > 0"
-							class="match-badge-v"
-							:class="getMatchLevel(activeRecipe)"
-						>
-							<text>{{ activeRecipe.matchCount }}/{{ activeRecipe.ingredients.length }} 种食材</text>
-						</view>
-					</view>
-					<view class="modal-meta">
-						<view class="meta-item">
-							<text class="material-icons meta-icon">schedule</text>
-							<text>{{ activeRecipe.time }}</text>
-						</view>
-						<view class="meta-item">
-							<text class="material-icons meta-icon">local_fire_department</text>
-							<text>{{ activeRecipe.calories }}</text>
-						</view>
-						<view class="meta-item">
-							<text class="material-icons meta-icon">speed</text>
-							<text>{{ activeRecipe.difficulty }}</text>
-						</view>
-					</view>
-				</view>
-
-				<view class="modal-divider"></view>
-
-				<view class="modal-section">
-					<text class="modal-section-title">
-						<text class="material-icons" style="font-size:16px;color:var(--accent-cyan);">checklist</text>
-						所需食材
-					</text>
-					<view class="modal-ingredients">
-						<view
-							v-for="ing in activeRecipe.ingredients"
-							:key="typeof ing === 'string' ? ing : (ing.name || ing)"
-							class="modal-ing-chip"
-							:class="{ owned: isIngredientOwned(ing), missing: !isIngredientOwned(ing) }"
-						>
-							<text class="material-icons ing-status-icon">
-								{{ isIngredientOwned(ing) ? 'check_circle' : 'cancel' }}
-							</text>
-							<text>{{ typeof ing === 'string' ? ing : (ing.name || '') }}</text>
-							<text v-if="isIngredientOwned(ing)" class="ing-label">已有</text>
-							<text v-else class="ing-label missing-label">缺少</text>
-						</view>
-					</view>
-				</view>
-
-				<view class="modal-section">
-					<text class="modal-section-title">
-						<text class="material-icons" style="font-size:16px;color:var(--accent-cyan);">menu_book</text>
-						制作流程
-					</text>
-					<view class="steps-list">
-						<view v-for="(step, idx) in activeRecipe.steps" :key="idx" class="step-item">
-							<view class="step-num">{{ idx + 1 }}</view>
-							<text class="step-text">{{ step }}</text>
-						</view>
-					</view>
-				</view>
-
-				<view class="modal-close-btn" @click="closeRecipe">
-					<text>关闭</text>
-				</view>
+			<!-- Agent Chat Box -->
+			<view class="chat-section">
+				<AgentChatBox ref="chatBox" />
 			</view>
-		</view>
+		</scroll-view>
 
+		<!-- Recipe Detail Modal -->
+		<RecipeDetailModal v-if="activeRecipe" :recipe="activeRecipe" :ownedKeywords="ownedKeywords" @close="closeRecipe" />
 	</view>
-		</view>
-
-		<!-- ============ Phase 8: Agent 聊天模块 ============ -->
-		<view class="module module-chat">
-			<view class="corner corner-tl"></view>
-			<view class="corner corner-tr"></view>
-			<view class="corner corner-bl"></view>
-			<view class="corner corner-br"></view>
-
-			<view class="module-header">
-				<view class="stats-header-icon">
-					<text class="material-icons module-icon">psychology</text>
-					<view class="pulse-ring" :class="{ active: chatStreaming }"></view>
-				</view>
-				<view>
-					<view class="stats-title-row">
-						<text class="module-title">AI 对话</text>
-						<view class="live-badge" v-if="chatConnected">
-							<view class="live-dot"></view>
-							<text>在线</text>
-						</view>
-					</view>
-					<text class="module-desc">告诉冰箱你想吃什么，AI 帮你推荐</text>
-				</view>
-			</view>
-
-			<!-- 流式输出中 -->
-			<view v-if="chatStreaming && chatStreamText" class="chat-stream-box">
-				<text class="chat-cursor">|</text>
-				<text class="chat-stream-text">{{ chatStreamText }}</text>
-			</view>
-
-			<!-- 工具状态 -->
-			<view v-if="chatToolStatus" class="chat-tool-status">
-				<text class="material-icons" style="font-size:14px;">build</text>
-				<text>{{ chatToolStatus }}</text>
-			</view>
-
-			<!-- 快捷提问 -->
-			<view class="chat-quick-actions" v-if="chatMessages.length === 0 && !chatStreaming">
-				<text class="quick-label">试试问：</text>
-				<view class="quick-btns">
-					<view class="quick-btn" @click="sendQuickChat('能做什么菜?')">能做什么菜?</view>
-					<view class="quick-btn" @click="sendQuickChat('推荐3道简单快手的菜')">推荐3道快手菜</view>
-					<view class="quick-btn" @click="sendQuickChat('冰箱里有什么?')">冰箱里有什么?</view>
-				</view>
-			</view>
-
-			<!-- 输入区 -->
-			<view class="chat-input-row">
-				<input class="chat-input" v-model="chatInput" placeholder="告诉冰箱你想吃什么..."
-					:disabled="chatStreaming" @confirm="sendChat" />
-				<view class="chat-send-btn" :class="{ disabled: chatStreaming || !chatInput.trim() }"
-					@click="sendChat">
-					<text class="material-icons" style="font-size:20px;color:#fff;">send</text>
-				</view>
-			</view>
-		</view>
-
 </template>
 
 <script>
 import { store } from '@/utils/store.js'
-import { connectAgentChat, sendAgentMessage, onAgentChat, offAgentChat, disconnectAgentChat } from '@/utils/agentChat.js'  # Phase 8
+import RecipeDetailModal from '@/components/recipes/RecipeDetailModal.vue'
+import AgentChatBox from '@/components/recipes/AgentChatBox.vue'
 
-import { getRecipeImage, getIngredientImage, FALLBACK_RECIPE, FALLBACK_FOOD } from '@/utils/imageResolver.js'
+import { getRecipeImage, FALLBACK_RECIPE } from '@/utils/imageResolver.js'
 
 function getApiBase() {
 	try {
@@ -707,9 +526,6 @@ const INGREDIENT_ALIASES = {
 const MODIFIER_PREFIXES = ['有机', '鲜', '澳洲', '红富士', '希腊', '进口', '土', '纯', '精品', '新鲜', '精选', '特级', '散养']
 
 function buildOwnedKeywords() {
-	// Fix #5: 循环去除前缀，而非只去一层
-	// 原有逻辑: name.replace(/^(有机|鲜|...)/, '') → 只去一层，"有机鲜牛奶"→"鲜牛奶"
-	// 修复后: 循环去除直到没有更多前缀可去，"有机鲜牛奶"→"鲜牛奶"→"牛奶"
 	const keywords = new Set()
 	store.foods.forEach(f => {
 		const name = f.name
@@ -732,23 +548,17 @@ function buildOwnedKeywords() {
 }
 
 function matchIngredient(recipeIng, ownedKeywords) {
-	// Fix #6: 精确优先匹配，子串匹配作为回退
-	// 原有逻辑: kw.includes(alias) || alias.includes(kw) → "鸡"匹配"鸡精"/"火鸡"
-	// 修复后: 先尝试精确别名匹配，再尝试边界感知子串匹配
 	const aliases = INGREDIENT_ALIASES[recipeIng]
 	const ownedArr = [...ownedKeywords]
 
 	if (aliases) {
-		// 优先级1: 精确别名匹配 (owned keyword 与 alias 完全相等)
 		if (aliases.some(alias => ownedArr.some(kw => kw === alias))) {
 			return true
 		}
-		// 优先级2: 单字别名字串匹配加长度校验
-		// "鸡"只匹配单字食材，不匹配"鸡精""火鸡"
 		return aliases.some(alias => {
 			return ownedArr.some(kw => {
 				if (kw === alias) return true
-				if (alias.length <= 1) return false  // 单字不过滤
+				if (alias.length <= 1) return false
 				if (kw.length <= 1) return false
 				if (alias.length >= 3 && kw.length >= 3) {
 					return kw.includes(alias) || alias.includes(kw)
@@ -758,7 +568,6 @@ function matchIngredient(recipeIng, ownedKeywords) {
 		})
 	}
 
-	// 无别名表: 保守子串匹配 (双方长度都 ≥2 才生效)
 	const lower = recipeIng.toLowerCase()
 	return ownedArr.some(kw => {
 		const k = kw.toLowerCase()
@@ -771,9 +580,12 @@ function matchIngredient(recipeIng, ownedKeywords) {
 }
 
 export default {
+	components: { RecipeDetailModal, AgentChatBox },
 
 	data() {
 		return {
+			activeTab: 'recommend',
+			searchMode: 'name',
 			activeTag: '',
 			activeRecipe: null,
 			loading: false,
@@ -789,9 +601,15 @@ export default {
 			useFallback: false,
 			searchQuery: '',
 			fallbackImg: FALLBACK_IMG,
+			tabs: [
+				{ key: 'recommend', label: 'AI 推荐', icon: 'stars' },
+				{ key: 'search', label: '搜索', icon: 'search' },
+				{ key: 'all', label: '全部食谱', icon: 'apps' },
+			],
 		}
 	},
 	computed: {
+		ownedKeywords() { return [...buildOwnedKeywords()] },
 		totalFoods() { return store.totalCount },
 
 		isServerMode() { return this.recommendRecipes.length > 0 },
@@ -816,7 +634,11 @@ export default {
 		},
 
 		topMatches() {
-			return this.matchedRecipes.filter(r => r.matchCount >= 2).slice(0, 8)
+			return this.matchedRecipes.filter(r => r.matchCount >= 2).slice(0, 6)
+		},
+
+		moreMatches() {
+			return this.matchedRecipes.filter(r => r.matchCount >= 1).slice(6)
 		},
 
 		filteredRecipes() {
@@ -831,6 +653,10 @@ export default {
 		},
 	},
 	methods: {
+		switchTab(key) {
+			this.activeTab = key
+		},
+
 		resolveImage(img, name) {
 			if (img && (img.startsWith('http') || img.startsWith('/'))) return img
 			return getRecipeImage(name) || FALLBACK_IMG
@@ -967,8 +793,7 @@ export default {
 			}
 		},
 
-		onLoad() { this.fetchRecommend(); this.initAgentChat() },
-		onUnload() { disconnectAgentChat() },
+		onLoad() { this.fetchRecommend() },
 		onShow() { if (this.recommendRecipes.length === 0 && !this.loading) this.fetchRecommend() },
 
 		isIngredientOwned(recipeIng) {
@@ -1017,821 +842,513 @@ export default {
 
 <style scoped>
 .page-shell {
+	flex: 1;
 	display: flex;
 	flex-direction: column;
 	height: 100%;
 	overflow: hidden;
-	background: var(--bg-deep);
+	background: #0d1117;
 }
+
 .page {
 	flex: 1;
-	padding: 0 20px;
 	overflow-y: auto;
 	-webkit-overflow-scrolling: touch;
 }
 
-/* Header */
-.recipe-header { padding: 8px 0 16px; }
+/* ===== Header ===== */
+.recipe-header {
+	padding: 16px 20px 0;
+}
 .recipe-title {
 	font-size: 28px;
 	font-weight: 900;
-	color: var(--text-primary);
+	color: #f0f0f0;
 	letter-spacing: -0.5px;
 	display: block;
 }
 .recipe-sub {
 	font-size: 13px;
-	color: var(--text-secondary);
+	color: #8b949e;
 	margin-top: 4px;
 	display: block;
 }
 
-/* ===== Module ===== */
-.module {
-	background: var(--bg-card);
-	backdrop-filter: var(--glass-blur);
-	-webkit-backdrop-filter: var(--glass-blur);
-	border: 1px solid var(--border-card);
-	border-radius: var(--radius-lg);
-	padding: 20px;
-	margin-bottom: 20px;
-}
-/* ===== Module 1: Tech Stats Dashboard ===== */
-.module-stats {
-	position: relative;
-	background:
-		/* hex grid pattern */
-		url("data:image/svg+xml,%3Csvg width='60' height='52' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0L60 15v22l-30 15L0 37V15z' fill='none' stroke='rgba(0,212,255,0.04)' stroke-width='0.5'/%3E%3C/svg%3E") repeat,
-		radial-gradient(ellipse at 50% 0%, rgba(0, 212, 255, 0.1) 0%, transparent 60%),
-		radial-gradient(ellipse at 80% 100%, rgba(124, 58, 237, 0.06) 0%, transparent 50%),
-		linear-gradient(180deg, rgba(8, 12, 20, 0.97) 0%, rgba(12, 18, 30, 0.95) 100%);
-	border: 1px solid rgba(0, 212, 255, 0.15);
-	border-radius: var(--radius-lg);
-	box-shadow:
-		0 0 40px rgba(0, 212, 255, 0.06),
-		0 0 80px rgba(0, 212, 255, 0.03),
-		0 8px 32px rgba(0, 0, 0, 0.5),
-		inset 0 1px 0 rgba(255, 255, 255, 0.02);
-	overflow: hidden;
-}
-
-/* Corner brackets */
-.corner {
-	position: absolute;
-	width: 20px; height: 20px;
-	z-index: 3;
-	pointer-events: none;
-}
-.corner::before, .corner::after {
-	content: '';
-	position: absolute;
-	background: rgba(0, 212, 255, 0.4);
-	box-shadow: 0 0 6px rgba(0, 212, 255, 0.3);
-}
-.corner-tl { top: 8px; left: 8px; }
-.corner-tl::before { top: 0; left: 0; width: 12px; height: 1px; }
-.corner-tl::after  { top: 0; left: 0; width: 1px; height: 12px; }
-.corner-tr { top: 8px; right: 8px; }
-.corner-tr::before { top: 0; right: 0; width: 12px; height: 1px; }
-.corner-tr::after  { top: 0; right: 0; width: 1px; height: 12px; }
-.corner-bl { bottom: 8px; left: 8px; }
-.corner-bl::before { bottom: 0; left: 0; width: 12px; height: 1px; }
-.corner-bl::after  { bottom: 0; left: 0; width: 1px; height: 12px; }
-.corner-br { bottom: 8px; right: 8px; }
-.corner-br::before { bottom: 0; right: 0; width: 12px; height: 1px; }
-.corner-br::after  { bottom: 0; right: 0; width: 1px; height: 12px; }
-
-/* Scan line */
-.stats-scanline {
-	position: absolute;
-	top: 0; left: 0; right: 0;
-	height: 2px;
-	background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.5), rgba(124, 58, 237, 0.3), transparent);
-	animation: scanline-sweep 5s ease-in-out infinite;
-	pointer-events: none;
-	z-index: 4;
-}
-@keyframes scanline-sweep {
-	0%, 100% { top: -2px; opacity: 0; }
-	15% { opacity: 1; }
-	85% { top: 100%; opacity: 0.3; }
-}
-
-/* Floating data particles */
-.particle {
-	position: absolute;
-	width: 3px; height: 3px;
-	border-radius: 50%;
-	background: var(--accent-cyan);
-	box-shadow: 0 0 6px var(--accent-cyan), 0 0 12px rgba(0, 212, 255, 0.5);
-	pointer-events: none;
-	z-index: 1;
-}
-.p1 { top: 25%; left: 10%; animation: particle-float 6s ease-in-out infinite; }
-.p2 { top: 60%; right: 15%; animation: particle-float 8s ease-in-out 2s infinite; background: rgba(124, 58, 237, 0.8); box-shadow: 0 0 6px rgba(124, 58, 237, 0.8); }
-.p3 { top: 40%; left: 75%; animation: particle-float 7s ease-in-out 4s infinite; background: rgba(0, 230, 118, 0.8); box-shadow: 0 0 6px rgba(0, 230, 118, 0.8); }
-@keyframes particle-float {
-	0%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
-	50% { transform: translateY(-12px) scale(1.8); opacity: 1; }
-}
-
-/* Header */
-.stats-header {
-	border-bottom: 1px solid rgba(0, 212, 255, 0.08);
-}
-.stats-header-icon {
-	position: relative;
+/* ===== Stats Bar ===== */
+.stats-bar {
 	display: flex;
-	align-items: center;
-	justify-content: center;
+	gap: 10px;
+	padding: 16px 20px;
 }
-.pulse-ring {
-	position: absolute;
-	width: 100%; height: 100%;
-	border-radius: 50%;
-	border: 1px solid rgba(0, 212, 255, 0.3);
-	animation: pulse-ring-expand 2.5s ease-out infinite;
-}
-@keyframes pulse-ring-expand {
-	0% { transform: scale(0.8); opacity: 0.8; }
-	100% { transform: scale(2); opacity: 0; }
-}
-.stats-title-row {
+
+.stat-card {
+	flex: 1;
 	display: flex;
 	align-items: center;
 	gap: 10px;
-}
-.live-badge {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	padding: 2px 8px;
-	border-radius: 10px;
-	font-size: 9px;
-	font-weight: 700;
-	letter-spacing: 1px;
-	color: var(--accent-green);
-	background: rgba(0, 230, 118, 0.08);
-	border: 1px solid rgba(0, 230, 118, 0.2);
-}
-.live-dot {
-	width: 5px; height: 5px;
-	border-radius: 50%;
-	background: var(--accent-green);
-	box-shadow: 0 0 4px var(--accent-green);
-	animation: live-pulse 1s ease-in-out infinite;
-}
-@keyframes live-pulse {
-	0%, 100% { opacity: 1; box-shadow: 0 0 4px var(--accent-green); }
-	50% { opacity: 0.3; box-shadow: 0 0 2px var(--accent-green); }
+	background: rgba(255, 255, 255, 0.04);
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	border-radius: 14px;
+	padding: 12px 14px;
 }
 
-.module-header {
+.stat-icon-box {
+	width: 40px;
+	height: 40px;
+	border-radius: 12px;
 	display: flex;
 	align-items: center;
-	gap: 12px;
-	margin-bottom: 16px;
-	padding-bottom: 14px;
-	border-bottom: 1px solid rgba(255,255,255,0.06);
-	position: relative;
-	z-index: 2;
-}
-.module-icon {
-	font-size: 26px !important;
-	color: var(--accent-cyan);
+	justify-content: center;
 	flex-shrink: 0;
 }
-.module-title {
-	font-size: 16px;
-	font-weight: 700;
-	color: var(--text-primary);
-	display: block;
+.stat-icon-box .material-icons {
+	font-size: 20px !important;
 }
-.module-desc {
-	font-size: 12px;
-	color: var(--text-muted);
-	display: block;
+.icon-food {
+	background: rgba(0, 212, 255, 0.12);
+}
+.icon-food .material-icons {
+	color: #00d4ff;
+}
+.icon-cook {
+	background: rgba(168, 85, 247, 0.12);
+}
+.icon-cook .material-icons {
+	color: #a855f7;
+}
+.icon-rate {
+	background: rgba(34, 197, 94, 0.12);
+}
+.icon-rate .material-icons {
+	color: #22c55e;
+}
+
+.stat-body {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+.stat-body .stat-value {
+	font-size: 20px;
+	font-weight: 800;
+	color: #f0f0f0;
+	line-height: 1.1;
+}
+.stat-body .stat-value.highlight {
+	color: #a855f7;
+}
+.stat-body .stat-value.green {
+	color: #22c55e;
+}
+.stat-body .stat-label {
+	font-size: 11px;
+	color: #8b949e;
 	margin-top: 2px;
 }
 
-/* ===== Stats Rings ===== */
-.stats-row {
+/* ===== Tab Bar ===== */
+.tab-bar {
 	display: flex;
-	align-items: flex-start;
-	justify-content: space-around;
-	padding: 14px 0 6px;
-	position: relative;
-	z-index: 2;
-}
-.stat-item {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: 12px;
-	flex: 1;
-}
-.stat-ring {
-	width: 82px; height: 82px;
-	border-radius: 50%;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	position: relative;
-}
-.ring-cyan {
-	background: radial-gradient(circle at 40% 40%, rgba(0, 212, 255, 0.15) 0%, rgba(0, 0, 0, 0) 65%);
-	border: 2px solid transparent;
-	border-top-color: rgba(0, 212, 255, 0.5);
-	border-right-color: rgba(0, 212, 255, 0.2);
-	border-bottom-color: rgba(0, 212, 255, 0.08);
-	border-left-color: rgba(0, 212, 255, 0.08);
-	box-shadow: 0 0 24px rgba(0, 212, 255, 0.12), inset 0 0 16px rgba(0, 212, 255, 0.04);
-}
-.ring-purple {
-	background: radial-gradient(circle at 40% 40%, rgba(124, 58, 237, 0.15) 0%, rgba(0, 0, 0, 0) 65%);
-	border: 2px solid transparent;
-	border-top-color: rgba(124, 58, 237, 0.5);
-	border-right-color: rgba(124, 58, 237, 0.2);
-	border-bottom-color: rgba(124, 58, 237, 0.08);
-	border-left-color: rgba(124, 58, 237, 0.08);
-	box-shadow: 0 0 24px rgba(124, 58, 237, 0.12), inset 0 0 16px rgba(124, 58, 237, 0.04);
-}
-.ring-green {
-	background: radial-gradient(circle at 40% 40%, rgba(0, 230, 118, 0.15) 0%, rgba(0, 0, 0, 0) 65%);
-	border: 2px solid transparent;
-	border-top-color: rgba(0, 230, 118, 0.5);
-	border-right-color: rgba(0, 230, 118, 0.2);
-	border-bottom-color: rgba(0, 230, 118, 0.08);
-	border-left-color: rgba(0, 230, 118, 0.08);
-	box-shadow: 0 0 24px rgba(0, 230, 118, 0.12), inset 0 0 16px rgba(0, 230, 118, 0.04);
-}
-.ring-inner {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-}
-.stat-value {
-	font-size: 24px;
-	font-weight: 900;
-	line-height: 1;
-	letter-spacing: -1px;
-}
-.stat-unit {
-	font-size: 10px;
-	font-weight: 600;
-	margin-top: 1px;
-}
-.stat-gradient-cyan {
-	background: linear-gradient(180deg, #00d4ff, #60e0ff);
-	-webkit-background-clip: text;
-	-webkit-text-fill-color: transparent;
-	background-clip: text;
-	filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.5));
-}
-.stat-gradient-purple {
-	background: linear-gradient(180deg, #c4b5fd, #7c3aed);
-	-webkit-background-clip: text;
-	-webkit-text-fill-color: transparent;
-	background-clip: text;
-	filter: drop-shadow(0 0 8px rgba(124, 58, 237, 0.5));
-}
-.stat-gradient-green {
-	background: linear-gradient(180deg, #4ade80, #00e676);
-	-webkit-background-clip: text;
-	-webkit-text-fill-color: transparent;
-	background-clip: text;
-	filter: drop-shadow(0 0 8px rgba(0, 230, 118, 0.5));
-}
-.stat-label {
-	font-size: 12px;
-	font-weight: 600;
-	color: var(--text-secondary);
-	letter-spacing: 0.5px;
-}
-
-/* ===== Data Bars ===== */
-.stats-bars {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	padding: 10px 0 4px;
-	position: relative;
-	z-index: 2;
-}
-.data-bar-row {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-}
-.data-bar-label {
-	width: 52px;
-	font-size: 10px;
-	font-weight: 600;
-	color: var(--text-muted);
-	text-align: right;
-	flex-shrink: 0;
-	letter-spacing: 0.5px;
-}
-.data-bar-track {
-	flex: 1;
-	height: 4px;
-	border-radius: 2px;
-	background: rgba(255, 255, 255, 0.04);
-	overflow: hidden;
-}
-.data-bar-fill {
-	height: 100%;
-	border-radius: 2px;
-	transition: width 0.8s cubic-bezier(0.16, 0.8, 0.32, 1);
-	position: relative;
-}
-.data-bar-fill::after {
-	content: '';
-	position: absolute;
-	top: 0; right: 0; bottom: 0;
-	width: 20px;
-	background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4));
-	animation: bar-sheen 2s ease-in-out infinite;
-}
-@keyframes bar-sheen {
-	0%, 100% { opacity: 0; }
-	50% { opacity: 1; }
-}
-.bar-cyan {
-	background: linear-gradient(90deg, rgba(0, 212, 255, 0.4), rgba(0, 212, 255, 0.8));
-	box-shadow: 0 0 6px rgba(0, 212, 255, 0.3);
-}
-.bar-purple {
-	background: linear-gradient(90deg, rgba(124, 58, 237, 0.4), rgba(124, 58, 237, 0.8));
-	box-shadow: 0 0 6px rgba(124, 58, 237, 0.3);
-}
-.bar-green {
-	background: linear-gradient(90deg, rgba(0, 230, 118, 0.4), rgba(0, 230, 118, 0.8));
-	box-shadow: 0 0 6px rgba(0, 230, 118, 0.3);
-}
-
-/* ===== Action Button ===== */
-.action-btn {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	background: linear-gradient(135deg, rgba(0, 212, 255, 0.15), rgba(124, 58, 237, 0.12));
-	border: 1px solid rgba(0, 212, 255, 0.25);
+	margin: 0 20px 16px;
+	background: rgba(255, 255, 255, 0.03);
+	border: 1px solid rgba(255, 255, 255, 0.06);
 	border-radius: 14px;
-	padding: 6px 14px;
-	font-size: 12px;
-	font-weight: 600;
-	color: var(--accent-cyan);
-	flex-shrink: 0;
-	transition: var(--transition);
-}
-.action-btn:active {
-	background: linear-gradient(135deg, rgba(0, 212, 255, 0.25), rgba(124, 58, 237, 0.2));
-	transform: scale(0.96);
+	padding: 4px;
 }
 
-/* ===== Search Row ===== */
-.search-row {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-}
-.search-input-box {
+.tab-item {
 	flex: 1;
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	background: rgba(255,255,255,0.04);
-	border: 1px solid rgba(255,255,255,0.08);
-	border-radius: var(--radius-md);
-	padding: 10px 14px;
-}
-.search-input-icon {
-	font-size: 18px !important;
-	color: var(--text-muted);
-	flex-shrink: 0;
-}
-.search-input-field {
-	flex: 1;
-	font-size: 14px;
-	color: var(--text-primary);
-	border: none;
-	background: transparent;
-	outline: none;
-}
-.search-input-field::placeholder {
-	color: var(--text-muted);
+	justify-content: center;
+	gap: 6px;
+	padding: 10px 0;
+	border-radius: 11px;
 	font-size: 13px;
+	font-weight: 600;
+	color: #8b949e;
+	transition: all 0.25s ease;
 }
 
-/* ===== Recipe Category Tag ===== */
-.recipe-cat-tag {
-	padding: 2px 8px;
-	border-radius: 10px;
-	font-size: 10px;
-	font-weight: 600;
-	color: var(--accent-cyan);
-	background: rgba(0, 212, 255, 0.08);
-	border: 1px solid rgba(0, 212, 255, 0.15);
+.tab-item.active {
+	background: rgba(0, 212, 255, 0.12);
+	color: #00d4ff;
+	box-shadow: 0 0 12px rgba(0, 212, 255, 0.08);
+}
+
+.tab-icon {
+	font-size: 17px !important;
+}
+
+/* ===== Section ===== */
+.section {
+	padding: 0 20px 20px;
+}
+
+.section-title {
+	font-size: 15px;
+	font-weight: 700;
+	color: #e0e0e0;
+	margin-bottom: 12px;
+	display: block;
+}
+
+/* ===== Horizontal Scroll Cards ===== */
+.h-scroll {
 	white-space: nowrap;
-	flex-shrink: 0;
+	width: 100%;
+	padding-bottom: 4px;
 }
 
-/* ===== Loading State ===== */
-.loading-state {
-	text-align: center;
-	padding: 28px 20px;
-}
-.loading-icon {
-	font-size: 32px !important;
-	color: var(--accent-cyan);
-	display: block;
-	margin-bottom: 8px;
-	animation: spin 1.5s linear infinite;
-}
-@keyframes spin {
-	from { transform: rotate(0deg); }
-	to { transform: rotate(360deg); }
-}
-.loading-text {
-	font-size: 13px;
-	color: var(--text-secondary);
-	display: block;
-}
-
-/* ===== Tag Scroll ===== */
-.tag-scroll { display: flex; gap: 8px; white-space: nowrap; padding-bottom: 12px; }
-.tag-chip {
-	display: inline-flex;
-	flex-shrink: 0;
-	padding: 7px 16px;
-	border-radius: 16px;
-	font-size: 12px;
-	font-weight: 600;
-	color: var(--text-secondary);
-	background: rgba(255,255,255,0.04);
-	border: 1px solid rgba(255,255,255,0.08);
-	transition: var(--transition);
-}
-.tag-chip.active {
-	color: #fff;
-	background: rgba(0, 212, 255, 0.15);
-	border-color: var(--accent-cyan);
-	box-shadow: 0 0 12px rgba(0, 212, 255, 0.1);
-}
-
-/* ===== Horizontal Cards (Module 4 Best Matches) ===== */
-.recipe-h-scroll-wrap { margin-top: 4px; }
-.recipe-h-scroll { white-space: nowrap; padding-bottom: 4px; width: 100%; }
-.recipe-card-h {
+.card-h {
 	display: inline-block;
-	width: 200px;
+	width: 170px;
 	margin-right: 12px;
 	vertical-align: top;
-	position: relative;
-	background: rgba(255,255,255,0.03);
-	border: 1px solid rgba(255,255,255,0.06);
-	border-radius: var(--radius-lg);
+	background: rgba(255, 255, 255, 0.03);
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	border-radius: 16px;
 	overflow: hidden;
-	transition: var(--transition);
+	transition: transform 0.2s ease;
 }
-.recipe-card-h:active { transform: scale(0.97); }
-.recipe-img-h { width: 100%; height: 130px; object-fit: cover; display: block; position: relative; }
-.recipe-card-h-overlay {
-	position: absolute;
-	margin-top: -130px;
-	padding: 10px;
-	display: flex;
-	justify-content: flex-end;
+.card-h:active {
+	transform: scale(0.97);
+}
+
+.card-h-img-wrap {
+	position: relative;
+}
+.card-h-img {
 	width: 100%;
+	height: 140px;
+	object-fit: cover;
+	display: block;
 }
-.match-badge-h {
+.card-h-badge {
+	position: absolute;
+	top: 8px;
+	right: 8px;
 	padding: 3px 10px;
-	border-radius: 12px;
-	font-size: 11px;
+	border-radius: 10px;
+	font-size: 10px;
 	font-weight: 700;
 	backdrop-filter: blur(10px);
 	-webkit-backdrop-filter: blur(10px);
 }
-.match-badge-h.high { color: var(--accent-green);  background: rgba(0,230,118,0.15); }
-.match-badge-h.mid  { color: var(--accent-orange); background: rgba(245,158,11,0.15); }
-.match-badge-h.low  { color: var(--accent-red);    background: rgba(239,68,68,0.15); }
+.card-h-badge.high {
+	color: #22c55e;
+	background: rgba(34, 197, 94, 0.2);
+}
+.card-h-badge.mid {
+	color: #f59e0b;
+	background: rgba(245, 158, 11, 0.2);
+}
+.card-h-badge.low {
+	color: #ef4444;
+	background: rgba(239, 68, 68, 0.2);
+}
 
-.recipe-card-h-body { padding: 12px 14px; }
-.recipe-name-h {
+.card-h-body {
+	padding: 12px;
+}
+.card-h-name {
 	font-size: 14px;
 	font-weight: 700;
-	color: var(--text-primary);
+	color: #e0e0e0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	display: block;
 }
-.recipe-meta-h {
+.card-h-meta {
 	display: flex;
 	align-items: center;
 	gap: 4px;
 	margin-top: 6px;
 	font-size: 11px;
-	color: var(--text-secondary);
+	color: #8b949e;
 }
-.recipe-dot { color: var(--text-muted); margin: 0 2px; }
 
-/* ===== Vertical Cards (List) ===== */
-.recipe-list { display: flex; flex-direction: column; gap: 12px; padding-bottom: 4px; }
-.recipe-card-v {
+.meta-sep {
+	color: #484f58;
+	margin: 0 2px;
+}
+
+/* ===== Recipe Grid (2 cols) ===== */
+.recipe-grid {
 	display: flex;
-	gap: 14px;
-	background: rgba(255,255,255,0.03);
-	border: 1px solid rgba(255,255,255,0.06);
-	border-radius: var(--radius-md);
+	flex-wrap: wrap;
+	gap: 12px;
+	padding: 0 20px 16px;
+}
+
+.card-v {
+	width: calc(50% - 6px);
+	background: rgba(255, 255, 255, 0.03);
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	border-radius: 16px;
 	overflow: hidden;
-	padding: 12px;
-	transition: var(--transition);
+	transition: transform 0.2s ease;
 }
-.recipe-card-v:active { transform: scale(0.98); }
-.recipe-img-v { width: 100px; height: 100px; border-radius: var(--radius-sm); object-fit: cover; flex-shrink: 0; }
-.recipe-card-v-body { flex: 1; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
-.recipe-card-v-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.recipe-name-v {
-	font-size: 15px;
-	font-weight: 700;
-	color: var(--text-primary);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	flex: 1;
-}
-.match-badge-v {
-	padding: 2px 8px;
-	border-radius: 10px;
-	font-size: 10px;
-	font-weight: 700;
-	white-space: nowrap;
-	flex-shrink: 0;
-}
-.match-badge-v.high { color: var(--accent-green);  background: rgba(0,230,118,0.1); }
-.match-badge-v.mid  { color: var(--accent-orange); background: rgba(245,158,11,0.1); }
-.match-badge-v.low  { color: var(--accent-red);    background: rgba(239,68,68,0.1); }
-
-/* Ingredient Tags */
-.recipe-ingredients { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-.ing-tag {
-	padding: 2px 8px;
-	border-radius: 8px;
-	font-size: 10px;
-	font-weight: 500;
-	color: var(--text-muted);
-	background: rgba(255,255,255,0.04);
-	border: 1px solid rgba(255,255,255,0.06);
-}
-.ing-tag.owned {
-	color: var(--accent-cyan);
-	background: rgba(0, 212, 255, 0.08);
-	border-color: rgba(0, 212, 255, 0.15);
+.card-v:active {
+	transform: scale(0.97);
 }
 
-/* Recipe Stats */
-.recipe-card-v-bottom { display: flex; gap: 14px; margin-top: 10px; }
-.recipe-stat { display: flex; align-items: center; gap: 3px; font-size: 11px; color: var(--text-secondary); }
-
-/* Empty State */
-.empty-state { text-align: center; padding: 28px 20px; }
-.empty-icon { font-size: 48px !important; color: var(--text-muted); margin-bottom: 8px; display: block; }
-.empty-text { font-size: 14px; color: var(--text-secondary); display: block; }
-.empty-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; display: block; }
-
-/* ======================== Recipe Detail Modal ======================== */
-.modal-overlay {
-	position: fixed;
-	top: 0; left: 0; right: 0; bottom: 0;
-	background: rgba(0, 0, 0, 0.7);
-	backdrop-filter: blur(8px);
-	-webkit-backdrop-filter: blur(8px);
-	z-index: 200;
-	display: flex;
-	align-items: flex-end;
-	justify-content: center;
-}
-.modal-sheet {
+.card-v-img {
 	width: 100%;
-	max-width: 430px;
-	max-height: 85vh;
-	background: var(--bg-panel);
-	border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-	overflow-y: auto;
-	-webkit-overflow-scrolling: touch;
-	padding-bottom: 30px;
-}
-.modal-img {
-	width: 100%;
-	height: 200px;
+	height: 130px;
 	object-fit: cover;
 	display: block;
 }
-.modal-header { padding: 16px 20px 0; }
-.modal-title-row {
+
+.card-v-body {
+	padding: 10px 12px 12px;
+}
+
+.card-v-name {
+	font-size: 14px;
+	font-weight: 700;
+	color: #e0e0e0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	display: block;
+}
+
+.card-v-ingredients {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-top: 8px;
+}
+
+.ing-chip {
+	padding: 2px 7px;
+	border-radius: 6px;
+	font-size: 10px;
+	font-weight: 500;
+	color: #8b949e;
+	background: rgba(255, 255, 255, 0.04);
+	border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.ing-chip.owned {
+	color: #00d4ff;
+	background: rgba(0, 212, 255, 0.08);
+	border-color: rgba(0, 212, 255, 0.15);
+}
+.ing-more {
+	font-size: 10px;
+	color: #8b949e;
+	padding: 2px 4px;
+}
+
+.card-v-footer {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 10px;
-}
-.modal-name { font-size: 22px; font-weight: 900; color: var(--text-primary); flex: 1; }
-.modal-meta { display: flex; gap: 20px; margin-top: 12px; }
-.meta-item { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--text-secondary); }
-.meta-icon { font-size: 16px !important; color: var(--text-muted); }
-.modal-divider {
-	height: 1px;
-	margin: 16px 20px;
-	background: linear-gradient(to right, var(--border-card), transparent);
+	margin-top: 10px;
 }
 
-/* Modal Sections */
-.modal-section { padding: 0 20px; margin-bottom: 20px; }
-.modal-section-title {
+.match-tag {
+	padding: 2px 8px;
+	border-radius: 8px;
+	font-size: 10px;
+	font-weight: 700;
+	white-space: nowrap;
+}
+.match-tag.high {
+	color: #22c55e;
+	background: rgba(34, 197, 94, 0.1);
+}
+.match-tag.mid {
+	color: #f59e0b;
+	background: rgba(245, 158, 11, 0.1);
+}
+.match-tag.low {
+	color: #ef4444;
+	background: rgba(239, 68, 68, 0.1);
+}
+
+.cat-tag {
+	padding: 2px 8px;
+	border-radius: 8px;
+	font-size: 10px;
+	font-weight: 600;
+	color: #00d4ff;
+	background: rgba(0, 212, 255, 0.08);
+	border: 1px solid rgba(0, 212, 255, 0.12);
+}
+
+.card-v-time {
+	font-size: 11px;
+	color: #8b949e;
+}
+
+.card-v-meta {
+	font-size: 11px;
+	color: #8b949e;
 	display: flex;
 	align-items: center;
+	gap: 2px;
+}
+
+/* ===== Search ===== */
+.search-mode-row {
+	display: flex;
 	gap: 8px;
-	font-size: 15px;
+	padding: 0 20px 12px;
+}
+
+.mode-chip {
+	padding: 7px 18px;
+	border-radius: 20px;
+	font-size: 12px;
+	font-weight: 600;
+	color: #8b949e;
+	background: rgba(255, 255, 255, 0.04);
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	transition: all 0.25s ease;
+}
+.mode-chip.active {
+	color: #00d4ff;
+	background: rgba(0, 212, 255, 0.1);
+	border-color: rgba(0, 212, 255, 0.2);
+}
+
+.search-box {
+	padding: 0 20px 16px;
+}
+
+.search-input-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	background: rgba(255, 255, 255, 0.04);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 14px;
+	padding: 10px 14px;
+}
+
+.search-icon {
+	font-size: 18px !important;
+	color: #8b949e;
+	flex-shrink: 0;
+}
+
+.search-field {
+	flex: 1;
+	font-size: 14px;
+	color: #e0e0e0;
+	border: none;
+	background: transparent;
+	outline: none;
+}
+.search-field::placeholder {
+	color: #484f58;
+	font-size: 13px;
+}
+
+.search-btn {
+	padding: 8px 18px;
+	border-radius: 10px;
+	font-size: 13px;
 	font-weight: 700;
-	color: var(--text-primary);
+	color: #fff;
+	background: linear-gradient(135deg, #00d4ff, #0098ff);
+	flex-shrink: 0;
+}
+.search-btn.accent {
+	background: linear-gradient(135deg, #a855f7, #7c3aed);
+}
+.search-btn:active {
+	opacity: 0.8;
+	transform: scale(0.97);
+}
+
+/* ===== Tag Scroll ===== */
+.tag-scroll {
+	display: flex;
+	gap: 8px;
+	white-space: nowrap;
+	padding: 0 20px 14px;
+}
+
+.tag-chip {
+	display: inline-flex;
+	flex-shrink: 0;
+	padding: 7px 16px;
+	border-radius: 20px;
+	font-size: 12px;
+	font-weight: 600;
+	color: #8b949e;
+	background: rgba(255, 255, 255, 0.04);
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	transition: all 0.25s ease;
+}
+
+.tag-chip.active {
+	color: #00d4ff;
+	background: rgba(0, 212, 255, 0.12);
+	border-color: rgba(0, 212, 255, 0.25);
+	box-shadow: 0 0 12px rgba(0, 212, 255, 0.08);
+}
+
+/* ===== Loading ===== */
+.loading-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 40px 20px;
+	gap: 12px;
+}
+
+.loading-spinner {
+	width: 32px;
+	height: 32px;
+	border: 3px solid rgba(0, 212, 255, 0.15);
+	border-top-color: #00d4ff;
+	border-radius: 50%;
+	animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+	to { transform: rotate(360deg); }
+}
+
+.loading-text {
+	font-size: 13px;
+	color: #8b949e;
+}
+
+/* ===== Empty State ===== */
+.empty-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 48px 20px;
+}
+
+.empty-icon {
+	font-size: 52px !important;
+	color: #30363d;
 	margin-bottom: 12px;
 }
 
-/* Ingredient Chips in Modal */
-.modal-ingredients { display: flex; flex-wrap: wrap; gap: 8px; }
-.modal-ing-chip {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	padding: 6px 12px;
-	border-radius: 20px;
-	font-size: 13px;
+.empty-text {
+	font-size: 15px;
+	color: #8b949e;
 	font-weight: 600;
-	transition: var(--transition);
-}
-.modal-ing-chip.owned {
-	color: var(--accent-green);
-	background: rgba(0, 230, 118, 0.08);
-	border: 1px solid rgba(0, 230, 118, 0.2);
-}
-.modal-ing-chip.missing {
-	color: var(--text-muted);
-	background: rgba(255, 255, 255, 0.03);
-	border: 1px solid rgba(255, 255, 255, 0.06);
-}
-.ing-status-icon { font-size: 16px !important; }
-.ing-label { font-size: 10px; font-weight: 500; padding: 1px 6px; border-radius: 8px; }
-.modal-ing-chip.owned .ing-label {
-	color: var(--accent-green);
-	background: rgba(0, 230, 118, 0.15);
-}
-.missing-label {
-	color: var(--text-muted);
-	background: rgba(255,255,255,0.05);
 }
 
-/* Steps */
-.steps-list { display: flex; flex-direction: column; gap: 0; }
-.step-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
-.step-item:last-child { border-bottom: none; }
-.step-num {
-	width: 24px; height: 24px;
-	border-radius: 50%;
-	background: linear-gradient(135deg, #00d4ff, #7c3aed);
-	color: #fff;
+.empty-hint {
 	font-size: 12px;
-	font-weight: 700;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex-shrink: 0;
-	margin-top: 1px;
-}
-.step-text { font-size: 13px; color: var(--text-secondary); line-height: 1.7; flex: 1; }
-
-/* Close Button */
-.modal-close-btn {
-	margin: 10px 20px 0;
-	padding: 14px;
-	border-radius: var(--radius-md);
-	background: var(--bg-card);
-	border: 1px solid var(--border-card);
-	text-align: center;
-	font-size: 14px;
-	font-weight: 600;
-	color: var(--text-primary);
-	transition: var(--transition);
-}
-.modal-close-btn:active { background: var(--bg-card-hover); transform: scale(0.98); }
-
-/* ===== Phase 8: Agent 聊天模块 ===== */
-.module-chat { margin-top: 24px; }
-
-/* 流式输出盒 */
-.chat-stream-box {
-	background: rgba(0,255,136,0.05);
-	border: 1px solid rgba(0,255,136,0.15);
-	border-radius: 12px;
-	padding: 14px 16px;
-	margin: 12px 0;
-	min-height: 48px;
-	display: flex;
-	align-items: flex-start;
-	gap: 8px;
-}
-.chat-stream-text {
-	color: #e0e0e0;
-	font-size: 14px;
-	line-height: 1.6;
-	flex: 1;
-}
-.chat-cursor {
-	color: #00ff88;
-	font-weight: bold;
-	animation: blink 1s infinite;
-}
-@keyframes blink { 0%,100% { opacity:1 } 50% { opacity:0 } }
-
-/* 工具状态 */
-.chat-tool-status {
-	background: rgba(102,126,234,0.1);
-	border: 1px solid rgba(102,126,234,0.2);
-	border-radius: 8px;
-	padding: 8px 14px;
-	margin: 8px 0;
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	font-size: 13px;
-	color: #a0b4f0;
+	color: #484f58;
+	margin-top: 6px;
 }
 
-/* 快捷提问 */
-.chat-quick-actions { margin: 16px 0 12px; }
-.quick-label { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; display: block; }
-.quick-btns { display: flex; flex-wrap: wrap; gap: 8px; }
-.quick-btn {
-	background: rgba(0,204,255,0.08);
-	border: 1px solid rgba(0,204,255,0.2);
-	border-radius: 20px;
-	padding: 6px 14px;
-	font-size: 13px;
-	color: #0cf;
-	cursor: pointer;
+/* ===== Chat Section ===== */
+.chat-section {
+	padding: 0 20px 24px;
 }
-.quick-btn:active { background: rgba(0,204,255,0.15); }
-
-/* 输入行 */
-.chat-input-row {
-	display: flex;
-	gap: 10px;
-	align-items: center;
-	margin-top: 12px;
-}
-.chat-input {
-	flex: 1;
-	background: rgba(255,255,255,0.06);
-	border: 1px solid rgba(255,255,255,0.12);
-	border-radius: 24px;
-	padding: 10px 16px;
-	color: #e0e0e0;
-	font-size: 14px;
-	height: 40px;
-}
-.chat-send-btn {
-	width: 40px; height: 40px;
-	background: linear-gradient(135deg, #00ccff, #667eea);
-	border-radius: 50%;
-	display: flex; align-items: center; justify-content: center;
-	cursor: pointer;
-	transition: opacity 0.2s;
-}
-.chat-send-btn.disabled { opacity: 0.3; pointer-events: none; }
-
-/* 消息区 */
-.chat-messages { margin-bottom: 8px; }
-.chat-msg {
-	margin: 8px 0;
-	padding: 10px 14px;
-	border-radius: 12px;
-	font-size: 14px;
-	line-height: 1.6;
-}
-.chat-msg-user {
-	background: rgba(0,204,255,0.1);
-	border: 1px solid rgba(0,204,255,0.2);
-}
-.chat-msg-ai {
-	background: rgba(255,255,255,0.04);
-	border: 1px solid rgba(255,255,255,0.08);
-}
-.chat-role {
-	font-size: 11px;
-	color: var(--text-muted);
-	display: block;
-	margin-bottom: 4px;
-}
-.chat-text { color: #e0e0e0; }
 </style>

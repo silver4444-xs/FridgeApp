@@ -29,6 +29,17 @@ fridge_store = None
 # Agent 和 Graph 共享同一实例
 fridge_checkpointer = None
 
+# ── Context 数据 ──
+# 冰箱食材快照，由 OneNET Relay 回调更新，供 Agent context 注入使用
+current_fridge_inventory: list = []
+
+
+def get_current_inventory() -> list:
+    """获取冰箱当前食材快照（由 OneNET Relay 轮询/上传后更新）"""
+    return current_fridge_inventory
+
+fridge_model = None
+
 
 def get_recipe_db() -> RecipeDatabase:
     return recipe_db

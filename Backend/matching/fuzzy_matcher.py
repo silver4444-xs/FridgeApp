@@ -18,10 +18,14 @@ class FuzzyMatcher:
     @staticmethod
     def normalize(name: str) -> str:
         n = name.strip()
-        for prefix in sorted(MODIFIER_PREFIXES, key=len, reverse=True):
-            if n.startswith(prefix) and len(n) > len(prefix):
-                n = n[len(prefix):]
-                break
+        changed = True
+        while changed:
+            changed = False
+            for prefix in sorted(MODIFIER_PREFIXES, key=len, reverse=True):
+                if n.startswith(prefix) and len(n) > len(prefix):
+                    n = n[len(prefix):]
+                    changed = True
+                    break
         n = re.sub(r'\d+$', '', n)
         n = re.sub(r'\d+[g克千k][克g]?$', '', n)
         n = re.sub(r'\d+m[lL]$', '', n)
@@ -36,16 +40,14 @@ class FuzzyMatcher:
         candidates = {FuzzyMatcher.normalize(ingredient["name"])}
         for a in ingredient.get("aliases", []):
             candidates.add(FuzzyMatcher.normalize(a))
+        candidates.discard('')
+
+        if candidates & fridge_names:
+            return True
 
         for c in candidates:
-            if c in fridge_names:
-                return True
-
-        for c in candidates:
-            if not c: continue
             for fn in fridge_names:
-                if not fn: continue
-                if c in fn or fn in c:
+                if fn and (c in fn or fn in c):
                     return True
         return False
 

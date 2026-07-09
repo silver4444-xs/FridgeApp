@@ -3,6 +3,7 @@
  */
 
 import imageMapping from '@/data/image_mapping.json'
+import { ZH_TO_EN } from './foodData.js'
 
 const _mapping = imageMapping || { ingredients: {}, recipes: {} }
 
@@ -88,50 +89,58 @@ const DEMO_PHOTOS = {
 	'三文鱼': 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=400&h=300&fit=crop',
 }
 
-const ZH_TO_EN = {
-	// 水果
-	'苹果': 'apple', '香蕉': 'banana', '蓝莓': 'blueberry', '葡萄': 'grape',
-	'猕猴桃': 'kiwi', '柠檬': 'lemon', '青柠': 'lime', '芒果': 'mango',
-	'橙子': 'orange', '桃子': 'peach', '梨': 'pear', '菠萝': 'pineapple',
-	'草莓': 'strawberry', '西瓜': 'watermelon',
-	// 蔬菜
-	'彩椒': 'bell_pepper', '卷心菜': 'cabbage', '胡萝卜': 'carrot',
-	'花椰菜': 'cauliflower', '辣椒': 'chilli_pepper', '玉米': 'corn',
-	'黄瓜': 'cucumber', '茄子': 'eggplant', '大蒜': 'garlic', '生姜': 'ginger',
-	'四季豆': 'green_beans', '韭菜': 'leek', '生菜': 'lettuce',
-	'蘑菇': 'mushroom', '洋葱': 'onion', '土豆': 'potato',
-	'菠菜': 'spinach', '红薯': 'sweet potato', '番茄': 'tomato', '绿叶菜': 'green leaves',
-	// 肉蛋
-	'鸡肉': 'chicken', '鸡蛋': 'egg', '肉类': 'meat', '虾': 'shrimp',
-	// 饮品
-	'牛奶': 'milk', '酸奶': 'yogurt', '奶酪': 'cheese', '可乐': 'cola',
-	'水': 'water', '芬达': 'fanta', '雪碧': 'sprite', '饮料': 'drink',
-	// 零食
-	'面包': 'bread', '巧克力': 'chocolate',
-}
+const _imgCache = new Map()
+const _ingredientKeys = Object.keys(_mapping.ingredients || {})
+const _recipeKeys = Object.keys(_mapping.recipes || {})
 
 export function getIngredientImage(name) {
+	if (!name) return FALLBACK_FOOD
+	const cached = _imgCache.get(name)
+	if (cached !== undefined) return cached
+
 	const mapping = _mapping
-	if (mapping.ingredients[name]) return resolveImagePath(mapping.ingredients[name])
-	const stripped = (name || '').replace(/^(有机|鲜|澳洲|红富士|希腊|进口|土|纯)/, '')
-	if (stripped !== name && mapping.ingredients[stripped]) return resolveImagePath(mapping.ingredients[stripped])
-	const enKey = ZH_TO_EN[name] || ZH_TO_EN[stripped]
-	if (enKey && mapping.ingredients[enKey]) return resolveImagePath(mapping.ingredients[enKey])
-	for (const key of Object.keys(mapping.ingredients)) {
-		if (name.includes(key) || key.includes(name)) return resolveImagePath(mapping.ingredients[key])
+	let result = null
+	if (mapping.ingredients[name]) result = resolveImagePath(mapping.ingredients[name])
+	if (!result) {
+		const stripped = name.replace(/^(有机|鲜|澳洲|红富士|希腊|进口|土|纯)/, '')
+		if (stripped !== name && mapping.ingredients[stripped]) result = resolveImagePath(mapping.ingredients[stripped])
 	}
-	return DEMO_PHOTOS[name] || FALLBACK_FOOD
+	if (!result) {
+		const enKey = ZH_TO_EN[name]
+		if (enKey && mapping.ingredients[enKey]) result = resolveImagePath(mapping.ingredients[enKey])
+	}
+	if (!result) {
+		for (const key of _ingredientKeys) {
+			if (name.includes(key) || key.includes(name)) { result = resolveImagePath(mapping.ingredients[key]); break }
+		}
+	}
+	result = result || DEMO_PHOTOS[name] || FALLBACK_FOOD
+	_imgCache.set(name, result)
+	return result
 }
 
+const _recipeCache = new Map()
+
 export function getRecipeImage(name) {
+	if (!name) return FALLBACK_RECIPE
+	const cached = _recipeCache.get(name)
+	if (cached !== undefined) return cached
+
 	const mapping = _mapping
-	if (mapping.recipes[name]) return resolveImagePath(mapping.recipes[name])
-	const cleaned = (name || '').replace(/\s*(的)?(做法|制作方法)\s*$/, '')
-	if (cleaned !== name && mapping.recipes[cleaned]) return resolveImagePath(mapping.recipes[cleaned])
-	for (const key of Object.keys(mapping.recipes)) {
-		if (name.includes(key) || key.includes(name)) return resolveImagePath(mapping.recipes[key])
+	let result = null
+	if (mapping.recipes[name]) result = resolveImagePath(mapping.recipes[name])
+	if (!result) {
+		const cleaned = name.replace(/\s*(的)?(做法|制作方法)\s*$/, '')
+		if (cleaned !== name && mapping.recipes[cleaned]) result = resolveImagePath(mapping.recipes[cleaned])
 	}
-	return FALLBACK_RECIPE
+	if (!result) {
+		for (const key of _recipeKeys) {
+			if (name.includes(key) || key.includes(name)) { result = resolveImagePath(mapping.recipes[key]); break }
+		}
+	}
+	result = result || FALLBACK_RECIPE
+	_recipeCache.set(name, result)
+	return result
 }
 
 export function resolveImage(url, name, type) {

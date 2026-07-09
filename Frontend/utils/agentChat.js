@@ -92,6 +92,18 @@ export function sendAgentMessage(message, threadId) {
 	console.log('[AgentChat] Sent:', message.slice(0, 50))
 }
 
+export function resumeAgentChat(threadId, decision) {
+	if (!threadId) {
+		threadId = uni.getStorageSync('agent_thread_id') || ('user_' + Date.now())
+	}
+	if (!wsTask) {
+		_emit('error', 'WebSocket not connected')
+		return
+	}
+	wsTask.send({ data: JSON.stringify({ type: 'resume', thread_id: threadId, decision }) })
+	console.log('[AgentChat] Resume sent:', decision)
+}
+
 export function disconnectAgentChat() {
 	clearTimeout(reconnectTimer)
 	if (wsTask) { try { wsTask.close({}) } catch (_) {}; wsTask = null }
