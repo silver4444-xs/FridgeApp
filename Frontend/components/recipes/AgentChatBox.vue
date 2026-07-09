@@ -19,7 +19,7 @@
 			class="chat-body"
 			scroll-y
 			:scroll-top="scrollTop"
-			:scroll-with-animation="true"
+			:scroll-with-animation="!streaming"
 		>
 			<!-- Quick Actions -->
 			<view v-if="messages.length === 0 && !streaming" class="chat-welcome">
@@ -294,6 +294,11 @@ export default {
 			this.toolStatus = TOOL_NAMES[d.tool] || ('正在调用 ' + d.tool)
 		})
 		onAgentChat('toolEnd', () => { this.toolStatus = '' })
+		onAgentChat('toolError', (d) => {
+			const label = TOOL_NAMES[d.tool] || d.tool
+			this.toolStatus = label + ' 失败: ' + (d.error || '').slice(0, 60)
+			setTimeout(() => { this.toolStatus = '' }, 5000)
+		})
 		onAgentChat('done', () => {
 			if (this.streamText) {
 				const blocks = enrichBlocks(parseMessage(this.streamText))
@@ -352,7 +357,8 @@ export default {
 			this.$nextTick(() => { this.scrollToBottom() })
 		},
 		scrollToBottom() {
-			this.scrollTop = this.scrollTop + 1
+			// 交替使用两个大值，确保每次调用都触发 scroll-view 滚动到底部
+			this.scrollTop = this.scrollTop > 99998 ? 99997 : 99999
 		},
 	},
 }

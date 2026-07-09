@@ -32,17 +32,17 @@ class RecipeDatabase:
 
             name = meta.get("dish_name", "未知菜品")
             self._recipes[rid] = {
-                "id": rid,
-                "name": name,
-                "category": meta.get("category", "其他"),
-                "difficulty": meta.get("difficulty", "未知"),
-                "time": extracted["time"],
+                "id": str(rid),
+                "name": str(name),
+                "category": str(meta.get("category", "其他")),
+                "difficulty": str(meta.get("difficulty", "未知")),
+                "time": str(extracted["time"]),
                 "image": image,
                 "ingredients": extracted["ingredients"],
                 "steps": extracted["steps"],
-                "tips": extracted["tips"],
-                "tags": tags,
-                "source": meta.get("source", ""),
+                "tips": str(extracted["tips"]),
+                "tags": [str(t) for t in tags],
+                "source": str(meta.get("source", "")),
             }
             self._build_name_index(rid, name)
 

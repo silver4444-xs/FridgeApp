@@ -721,7 +721,10 @@ def create_fridge_agent(model_name: str = "deepseek-v4-flash",
             ),
             ToolRetryMiddleware(
                 max_retries=2,
-                tools=["find_substitutions", "search_cooking_knowledge"],
+                tools=[
+                    "find_substitutions", "search_cooking_knowledge",
+                    "recipe_expert", "substitution_expert", "cooking_expert",
+                ],
                 initial_delay=0.5,
                 max_delay=10.0,
                 backoff_factor=2.0,

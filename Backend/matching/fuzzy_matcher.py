@@ -12,6 +12,47 @@ MODIFIER_PREFIXES = [
 
 UNIT_SUFFIXES = ['g', 'kg', 'ml', 'l', '颗', '个', '瓶', '盒', '袋', '根', '把', '斤', '两']
 
+INGREDIENT_SYNONYMS = {
+    '番茄': ['西红柿'],
+    '西红柿': ['番茄'],
+    '土豆': ['马铃薯', '洋芋'],
+    '马铃薯': ['土豆', '洋芋'],
+    '西兰花': ['花椰菜', '青花菜'],
+    '花椰菜': ['西兰花'],
+    '鸡蛋': ['蛋', '鸡子'],
+    '鸡胸肉': ['鸡胸', '鸡脯肉'],
+    '鸡胸': ['鸡胸肉'],
+    '猪肉': ['猪', '五花肉'],
+    '牛肉': ['牛腩', '牛排'],
+    '洋葱': ['洋葱头', '圆葱'],
+    '大蒜': ['蒜', '蒜头'],
+    '姜': ['生姜', '姜片'],
+    '酱油': ['生抽', '老抽'],
+    '糖': ['白糖', '细砂糖', '冰糖'],
+    '米饭': ['米', '大米', '剩饭'],
+    '豆腐': ['嫩豆腐', '老豆腐'],
+    '胡萝卜': ['红萝卜'],
+    '生菜': ['叶生菜'],
+    '三文鱼': ['鲑鱼', '三文鱼排'],
+    '黄油': ['牛油'],
+    '蜂蜜': ['蜜糖'],
+    '牛奶': ['鲜牛奶', '纯牛奶', '鲜奶'],
+    '酸奶': ['希腊酸奶', '优格', '酸牛奶'],
+    '苹果': ['红富士苹果'],
+    '黑胡椒': ['黑胡椒粉', '胡椒'],
+    '橄榄油': ['食用油', '植物油'],
+    '淀粉': ['生粉', '玉米淀粉', '太白粉'],
+    '料酒': ['黄酒', '绍酒', '花雕酒'],
+    '辣椒': ['干辣椒', '小米椒', '红辣椒'],
+    '青椒': ['青辣椒', '柿子椒', '灯笼椒'],
+    '醋': ['白醋', '陈醋', '香醋'],
+    '虾': ['大虾', '鲜虾', '虾仁'],
+    '鸡肉': ['鸡', '鸡腿肉', '鸡翅'],
+    '排骨': ['猪排骨', '肋排'],
+    '花生': ['花生米'],
+    '黄瓜': ['青瓜'],
+}
+
 
 class FuzzyMatcher:
 
@@ -40,6 +81,9 @@ class FuzzyMatcher:
         candidates = {FuzzyMatcher.normalize(ingredient["name"])}
         for a in ingredient.get("aliases", []):
             candidates.add(FuzzyMatcher.normalize(a))
+        for c in list(candidates):
+            for syn in INGREDIENT_SYNONYMS.get(c, []):
+                candidates.add(syn)
         candidates.discard('')
 
         if candidates & fridge_names:
@@ -59,4 +103,8 @@ class FuzzyMatcher:
             if n: names.add(n)
             raw = item.get("name", "").strip().lower()
             if raw: names.add(raw)
-        return names
+        expanded = set(names)
+        for name in names:
+            for syn in INGREDIENT_SYNONYMS.get(name, []):
+                expanded.add(syn)
+        return expanded

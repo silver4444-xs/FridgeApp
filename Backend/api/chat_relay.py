@@ -140,6 +140,18 @@ async def _handle_chat_stream(ws: WebSocket, message: str, thread_id: str):
                 })
                 current_tool = None
 
+            # ── Tool 调用错误 ──
+            elif event_type == "on_tool_error":
+                error_tool = event.get("name", "unknown")
+                error_msg = str(event.get("data", {}).get("error", "未知错误"))
+                logger.warning(f"[Chat Stream] Tool error: {error_tool} — {error_msg[:200]}")
+                await ws.send_json({
+                    "type": "stream_tool_error",
+                    "tool": error_tool,
+                    "error": error_msg[:300],
+                })
+                current_tool = None
+
             elif event_type == "on_chain_interrupt":
                 await ws.send_json({
                     "type": "stream_interrupt",

@@ -6,7 +6,7 @@ import logging
 from collections import defaultdict
 from typing import List, Set, Dict
 
-from .fuzzy_matcher import FuzzyMatcher
+from .fuzzy_matcher import FuzzyMatcher, INGREDIENT_SYNONYMS
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,9 @@ class InvertedIndex:
                 names = {FuzzyMatcher.normalize(ing["name"])}
                 for a in ing.get("aliases", []):
                     names.add(FuzzyMatcher.normalize(a))
+                for n in list(names):
+                    for syn in INGREDIENT_SYNONYMS.get(n, []):
+                        names.add(syn)
                 for n in names:
                     if n:
                         self._index[n].add(rid)

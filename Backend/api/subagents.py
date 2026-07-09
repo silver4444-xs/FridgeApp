@@ -27,6 +27,7 @@ def _make_model(model_name: str = "deepseek-v4-flash",
                 max_tokens: int = 2048):
     """创建子 Agent 共享的模型实例。"""
     import os
+    import httpx
     from langchain.chat_models import init_chat_model
     return init_chat_model(
         f"openai:{model_name}",
@@ -34,6 +35,9 @@ def _make_model(model_name: str = "deepseek-v4-flash",
         max_tokens=max_tokens,
         openai_api_key=os.getenv("DEEPSEEK_API_KEY"),
         openai_api_base="https://api.deepseek.com/v1",
+        http_client=httpx.Client(
+            timeout=httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0),
+        ),
     )
 
 _model_cache = {}
@@ -130,12 +134,16 @@ def call_recipe_expert(query: str) -> str:
             checkpointer=fridge_checkpointer,
         )
 
-    result = _recipe_subagent.invoke({
-        "messages": [{"role": "user", "content": query}],
-    })
-    if "structured_response" in result:
-        return result["structured_response"].model_dump_json(indent=2, ensure_ascii=False)
-    return result["messages"][-1].content
+    try:
+        result = _recipe_subagent.invoke({
+            "messages": [{"role": "user", "content": query}],
+        })
+        if "structured_response" in result:
+            return result["structured_response"].model_dump_json(indent=2, ensure_ascii=False)
+        return result["messages"][-1].content
+    except Exception as e:
+        logger.error(f"[recipe_expert] 调用失败: {e}")
+        return f"菜谱专家暂时无法响应: {str(e)[:200]}"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -201,12 +209,16 @@ def call_substitution_expert(query: str) -> str:
             checkpointer=fridge_checkpointer,
         )
 
-    result = _substitution_subagent.invoke({
-        "messages": [{"role": "user", "content": query}],
-    })
-    if "structured_response" in result:
-        return result["structured_response"].model_dump_json(indent=2, ensure_ascii=False)
-    return result["messages"][-1].content
+    try:
+        result = _substitution_subagent.invoke({
+            "messages": [{"role": "user", "content": query}],
+        })
+        if "structured_response" in result:
+            return result["structured_response"].model_dump_json(indent=2, ensure_ascii=False)
+        return result["messages"][-1].content
+    except Exception as e:
+        logger.error(f"[substitution_expert] 调用失败: {e}")
+        return f"替换专家暂时无法响应: {str(e)[:200]}"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -265,10 +277,14 @@ def call_cooking_expert(query: str) -> str:
             checkpointer=fridge_checkpointer,
         )
 
-    result = _cooking_subagent.invoke({
-        "messages": [{"role": "user", "content": query}],
-    })
-    return result["messages"][-1].content
+    try:
+        result = _cooking_subagent.invoke({
+            "messages": [{"role": "user", "content": query}],
+        })
+        return result["messages"][-1].content
+    except Exception as e:
+        logger.error(f"[cooking_expert] 调用失败: {e}")
+        return f"烹饪专家暂时无法响应: {str(e)[:200]}"
 
 
 # ═══════════════════════════════════════════════════════════════

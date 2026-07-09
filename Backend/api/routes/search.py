@@ -19,14 +19,14 @@ def search(q: str = Query(..., min_length=1),
         if not recipe:
             continue
         results.append({
-            "id": recipe["id"],
-            "name": recipe["name"],
-            "category": recipe.get("category", ""),
-            "difficulty": recipe.get("difficulty", ""),
-            "time": recipe.get("time", ""),
+            "id": str(recipe["id"]),
+            "name": str(recipe["name"]),
+            "category": str(recipe.get("category", "")),
+            "difficulty": str(recipe.get("difficulty", "")),
+            "time": str(recipe.get("time", "")),
             "image": recipe.get("image"),
             "ingredients": [i["name"] if isinstance(i, dict) else str(i) for i in recipe.get("ingredients", [])],
             "steps": recipe.get("steps", []),
-            "tags": recipe.get("tags", []),
+            "tags": [str(t) for t in recipe.get("tags", [])],
         })
     return {"results": results, "query": q}

@@ -48,20 +48,20 @@ def recommend(req: RecommendRequest,
         ratio = match_count / total if total > 0 else 0
 
         results.append(RecipeSummary(
-            id=recipe["id"],
-            name=recipe["name"],
+            id=str(recipe["id"]),
+            name=str(recipe["name"]),
             image=recipe.get("image"),
-            category=recipe.get("category", "其他"),
-            difficulty=recipe.get("difficulty", "未知"),
-            time=recipe.get("time", "未知"),
-            ingredients=[i["name"] for i in recipe.get("ingredients", [])],
+            category=str(recipe.get("category", "其他")),
+            difficulty=str(recipe.get("difficulty", "未知")),
+            time=str(recipe.get("time", "未知")),
+            ingredients=[i["name"] if isinstance(i, dict) else str(i) for i in recipe.get("ingredients", [])],
             matchCount=match_count,
             totalIngredients=total,
             matchRatio=round(ratio, 2),
             ownedIngredients=matched,
             missingIngredients=missing,
             steps=recipe.get("steps", []),
-            tags=recipe.get("tags", []),
+            tags=[str(t) for t in recipe.get("tags", [])],
         ))
 
     results.sort(key=lambda r: (r.matchCount, r.matchRatio), reverse=True)

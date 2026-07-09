@@ -15,15 +15,15 @@ def get_recipe(recipe_id: str, db: RecipeDatabase = Depends(get_recipe_db)):
     if not recipe:
         raise HTTPException(status_code=404, detail="菜谱不存在")
     return RecipeDetail(
-        id=recipe["id"],
-        name=recipe["name"],
+        id=str(recipe["id"]),
+        name=str(recipe["name"]),
         image=recipe.get("image"),
-        category=recipe.get("category", "其他"),
-        difficulty=recipe.get("difficulty", "未知"),
-        time=recipe.get("time", "未知"),
+        category=str(recipe.get("category", "其他")),
+        difficulty=str(recipe.get("difficulty", "未知")),
+        time=str(recipe.get("time", "未知")),
         ingredients=recipe.get("ingredients", []),
         steps=recipe.get("steps", []),
-        tips=recipe.get("tips", ""),
-        tags=recipe.get("tags", []),
-        source=recipe.get("source", ""),
+        tips=str(recipe.get("tips", "")),
+        tags=[str(t) for t in recipe.get("tags", [])],
+        source=str(recipe.get("source", "")),
     )

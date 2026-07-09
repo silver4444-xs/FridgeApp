@@ -9,7 +9,7 @@ import { store } from './store.js'
 
 let wsTask = null
 let reconnectTimer = null
-const listeners = { token: [], toolStart: [], toolEnd: [], done: [], error: [] }
+const listeners = { token: [], toolStart: [], toolEnd: [], toolError: [], done: [], error: [] }
 
 function getChatWsUrl() {
 	try {
@@ -52,6 +52,7 @@ export function connectAgentChat() {
 					case 'stream_token': _emit('token', data.token); break
 					case 'stream_tool_start': _emit('toolStart', data); break
 					case 'stream_tool_end': _emit('toolEnd', data); break
+					case 'stream_tool_error': _emit('toolError', { tool: data.tool, error: data.error }); break
 					case 'stream_done': _emit('done'); break
 					case 'stream_error': _emit('error', data.error); break
 				}

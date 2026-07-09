@@ -191,7 +191,7 @@
 						v-for="r in searchResults"
 						:key="r.id"
 						class="card-v"
-						@click="openSearchResult(r)"
+						@click="openRecipe(r)"
 					>
 						<image :src="r.image || fallbackImg" mode="aspectFill" class="card-v-img" />
 						<view class="card-v-body">
@@ -743,7 +743,11 @@ export default {
 					this.searchResults = res.data.results.map(r => ({
 						...r,
 						image: getRecipeImage(r.name) || FALLBACK_IMG,
-					}))
+					calories: '--',
+					matchCount: 0,
+					ownedIngredients: [],
+					missingIngredients: r.ingredients || [],
+				}))
 				} else {
 					this.searchResults = []
 				}
