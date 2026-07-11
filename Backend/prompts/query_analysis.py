@@ -3,32 +3,15 @@
 from langchain_core.prompts import ChatPromptTemplate
 
 ANALYZE_QUERY = ChatPromptTemplate.from_messages([
-    ("system", """作为RAG系统的查询分析专家，请深度分析以下查询的特征：
+    ("system", """作为RAG系统的查询分析专家，请深度分析以下查询的特征，严格按指定 JSON 字段名输出：
 
-请从以下维度分析：
-
-1. 查询复杂度 (0-1)：
-   - 0.0-0.3: 简单信息查找（如：红烧肉怎么做？）
-   - 0.4-0.7: 中等复杂度（如：川菜有哪些特色菜？）
-   - 0.8-1.0: 高复杂度推理（如：为什么川菜用花椒而不是胡椒？）
-
-2. 关系密集度 (0-1)：
-   - 0.0-0.3: 单一实体信息（如：西红柿的营养价值）
-   - 0.4-0.7: 实体间关系（如：鸡肉配什么蔬菜？）
-   - 0.8-1.0: 复杂关系网络（如：川菜的形成与地理、历史的关系）
-
-3. 推理需求：
-   - 是否需要多跳推理？
-   - 是否需要因果分析？
-   - 是否需要对比分析？
-
-4. 实体识别：
-   - 查询中包含多少个明确实体？
-   - 实体类型是什么？
-
-基于分析推荐检索策略：
-- hybrid_traditional: 适合简单直接的信息查找
-- graph_rag: 适合复杂关系推理和知识发现
-- combined: 需要两种策略结合"""),
+JSON 字段说明（必须使用这些字段名，不要翻译或重命名）：
+- query_complexity (float 0-1): 查询复杂度。0.0-0.3=简单查找(如"红烧肉怎么做")，0.4-0.7=中等(如"川菜有哪些特色菜")，0.8-1.0=高复杂度推理(如"为什么川菜用花椒而不是胡椒")
+- relationship_intensity (float 0-1): 关系密集度。0.0-0.3=单一实体，0.4-0.7=实体间关系，0.8-1.0=复杂关系网络
+- reasoning_required (bool): 是否需要多跳推理/因果分析/对比分析
+- entity_count (int): 查询中明确实体的数量
+- recommended_strategy (str): 推荐检索策略，可选 hybrid_traditional / graph_rag / combined
+- confidence (float 0-1): 推荐置信度
+- reasoning (str): 推荐理由简述 (15字以内)"""),
     ("user", "查询：{query}"),
 ])

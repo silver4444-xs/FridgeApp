@@ -82,7 +82,7 @@ SYSTEM_QUERY_ANALYSIS = """请识别：
 }}"""
 
 UNDERSTAND_GRAPH_QUERY = ChatPromptTemplate.from_messages([
-    ("system", f"""作为图数据库专家，分析以下查询的图结构意图，并将自然语言问题映射到**已有图结构**上。
+    ("system", f"""作为图数据库专家，输出JSON格式结果。分析以下查询的图结构意图，并将自然语言问题映射到**已有图结构**上。
 
 {SYSTEM_GRAPH_STRUCTURE}
 

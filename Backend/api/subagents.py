@@ -24,13 +24,19 @@ logger = logging.getLogger(__name__)
 
 def _make_model(model_name: str = "deepseek-v4-flash",
                 temperature: float = 0.1,
-                max_tokens: int = 2048):
-    """创建子 Agent 共享的模型实例。"""
+                max_tokens: int = 2048,
+                disable_thinking: bool = False):
+    """创建子 Agent 共享的模型实例。
+
+    disable_thinking=True: 禁用 DeepSeek thinking 模式。
+    使用 response_format (Structured Output) 时必须禁 thinking，
+    因为 thinking 模式下 DeepSeek 不支持 tool_choice。
+    """
     import os
     import httpx
     from langchain.chat_models import init_chat_model
-    return init_chat_model(
-        f"openai:{model_name}",
+    kwargs = dict(
+        model=f"openai:{model_name}",
         temperature=temperature,
         max_tokens=max_tokens,
         openai_api_key=os.getenv("DEEPSEEK_API_KEY"),
@@ -39,13 +45,16 @@ def _make_model(model_name: str = "deepseek-v4-flash",
             timeout=httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0),
         ),
     )
+    if disable_thinking:
+        kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
+    return init_chat_model(**kwargs)
 
 _model_cache = {}
 
-def _get_model(temperature: float = 0.1):
-    key = ("model", temperature)
+def _get_model(temperature: float = 0.1, disable_thinking: bool = False):
+    key = ("model", temperature, disable_thinking)
     if key not in _model_cache:
-        _model_cache[key] = _make_model(temperature=temperature)
+        _model_cache[key] = _make_model(temperature=temperature, disable_thinking=disable_thinking)
     return _model_cache[key]
 
 
@@ -127,7 +136,7 @@ def call_recipe_expert(query: str) -> str:
         from api.models import AgentRecommendResponse
         from api.dependencies import fridge_store, fridge_checkpointer
         _recipe_subagent = _create_recipe_agent(
-            _get_model(),
+            _get_model(disable_thinking=True),
             [recommend_by_fridge, search_recipes_by_ingredients, get_recipe_detail],
             response_format=AgentRecommendResponse,
             store=fridge_store,
@@ -203,7 +212,7 @@ def call_substitution_expert(query: str) -> str:
         from api.models import AgentSubstitutionResponse
         from api.dependencies import fridge_store, fridge_checkpointer
         _substitution_subagent = _create_substitution_agent(
-            _get_model(temperature=0.0),
+            _get_model(temperature=0.0, disable_thinking=True),
             response_format=AgentSubstitutionResponse,
             store=fridge_store,
             checkpointer=fridge_checkpointer,

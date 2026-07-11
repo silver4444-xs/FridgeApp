@@ -141,8 +141,8 @@ class HybridRetrievalModule:
         # ChatPromptTemplate + with_structured_output 调用
         try:
             prompt = EXTRACT_QUERY_KEYWORDS.format(query=query)
-            structured_llm = self.llm_client.with_structured_output(KeywordsResult)
-            result = structured_llm.invoke(prompt)
+            structured_llm = self.llm_client.with_structured_output(KeywordsResult, method="json_mode")
+            result = structured_llm.invoke("Output JSON.\n" + prompt)
             entity_keywords = result.entity_keywords
             topic_keywords = result.topic_keywords
             logger.info(f"关键词提取完成 - 实体级: {entity_keywords}, 主题级: {topic_keywords}")

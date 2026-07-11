@@ -1,0 +1,161 @@
+[
+  {
+    "input": "冰箱里有什么食材？",
+    "expected_tools": ["get_fridge_inventory"],
+    "expected_subagent": null,
+    "category": "inventory",
+    "difficulty": "easy",
+    "should_not_use": ["recommend_by_fridge", "search_recipes_by_ingredients"]
+  },
+  {
+    "input": "帮我看看冰箱里的东西能做什么菜",
+    "expected_tools": ["recipe_expert"],
+    "expected_subagent": "recipe_expert",
+    "category": "recommend",
+    "difficulty": "medium",
+    "should_not_use": ["search_cooking_knowledge", "find_substitutions"]
+  },
+  {
+    "input": "番茄炒蛋怎么做？",
+    "expected_tools": ["recipe_expert"],
+    "expected_subagent": "recipe_expert",
+    "category": "recipe_detail",
+    "difficulty": "easy",
+    "expected_action": "get_recipe_detail"
+  },
+  {
+    "input": "我没有黄油了，能用什么代替？",
+    "expected_tools": ["substitution_expert"],
+    "expected_subagent": "substitution_expert",
+    "category": "substitution",
+    "difficulty": "easy",
+    "should_not_use": ["recipe_expert", "search_cooking_knowledge"]
+  },
+  {
+    "input": "煎鱼怎么不粘锅？",
+    "expected_tools": ["cooking_expert"],
+    "expected_subagent": "cooking_expert",
+    "category": "knowledge",
+    "difficulty": "medium",
+    "should_not_use": ["get_fridge_inventory"]
+  },
+  {
+    "input": "我不吃花生，对海鲜过敏",
+    "expected_tools": ["save_user_preferences"],
+    "expected_subagent": null,
+    "category": "preferences",
+    "difficulty": "easy",
+    "should_not_use": ["recommend_by_fridge", "search_recipes_by_ingredients"]
+  },
+  {
+    "input": "我的饮食偏好是什么？",
+    "expected_tools": ["get_user_preferences"],
+    "expected_subagent": null,
+    "category": "preferences",
+    "difficulty": "easy",
+    "should_not_use": ["save_user_preferences"]
+  },
+  {
+    "input": "推荐几道川菜给我",
+    "expected_tools": ["recipe_expert"],
+    "expected_subagent": "recipe_expert",
+    "category": "recommend",
+    "difficulty": "medium",
+    "should_not_use": ["substitution_expert"]
+  },
+  {
+    "input": "鸡肉怎么腌制才能嫩？",
+    "expected_tools": ["cooking_expert"],
+    "expected_subagent": "cooking_expert",
+    "category": "knowledge",
+    "difficulty": "medium",
+    "should_not_use": ["get_fridge_inventory", "save_user_preferences"]
+  },
+  {
+    "input": "鸡蛋和牛奶能做什么？",
+    "expected_tools": ["recipe_expert"],
+    "expected_subagent": "recipe_expert",
+    "category": "search",
+    "difficulty": "easy",
+    "expected_action": "search_recipes_by_ingredients"
+  },
+  {
+    "input": "我没有烤箱，但想做蛋糕怎么办？",
+    "expected_tools": ["cooking_expert"],
+    "expected_subagent": "cooking_expert",
+    "category": "knowledge",
+    "difficulty": "hard",
+    "should_not_use": ["save_user_preferences", "get_fridge_inventory"]
+  },
+  {
+    "input": "蚝油可以用什么替换？",
+    "expected_tools": ["substitution_expert"],
+    "expected_subagent": "substitution_expert",
+    "category": "substitution",
+    "difficulty": "easy",
+    "should_not_use": ["recipe_expert"]
+  },
+  {
+    "input": "帮我保存一下，我喜欢吃辣，不吃香菜",
+    "expected_tools": ["save_user_preferences"],
+    "expected_subagent": null,
+    "category": "preferences",
+    "difficulty": "easy"
+  },
+  {
+    "input": "红烧猪蹄的详细步骤是什么？",
+    "expected_tools": ["recipe_expert"],
+    "expected_subagent": "recipe_expert",
+    "category": "recipe_detail",
+    "difficulty": "easy",
+    "expected_action": "get_recipe_detail"
+  },
+  {
+    "input": "冰箱里有鸡蛋和番茄，但我不能吃辣",
+    "expected_tools": ["recipe_expert", "get_fridge_inventory"],
+    "expected_subagent": "recipe_expert",
+    "category": "recommend",
+    "difficulty": "medium",
+    "should_not_use": ["substitution_expert"]
+  },
+  {
+    "input": "川菜和水煮鱼有什么关系？",
+    "expected_tools": ["cooking_expert"],
+    "expected_subagent": "cooking_expert",
+    "category": "knowledge",
+    "difficulty": "medium",
+    "should_not_use": ["get_fridge_inventory", "save_user_preferences"]
+  },
+  {
+    "input": "牛奶快过期了，能做什么消耗掉？",
+    "expected_tools": ["recipe_expert"],
+    "expected_subagent": "recipe_expert",
+    "category": "search",
+    "difficulty": "medium",
+    "should_not_use": ["substitution_expert"]
+  },
+  {
+    "input": "帮我查一下我之前设置过什么偏好",
+    "expected_tools": ["get_user_preferences"],
+    "expected_subagent": null,
+    "category": "preferences",
+    "difficulty": "easy",
+    "should_not_use": ["save_user_preferences"]
+  },
+  {
+    "input": "白醋和黑醋有什么区别？做菜用哪个？",
+    "expected_tools": ["cooking_expert"],
+    "expected_subagent": "cooking_expert",
+    "category": "knowledge",
+    "difficulty": "medium",
+    "should_not_use": ["get_fridge_inventory"]
+  },
+  {
+    "input": "现在冰箱有鸡胸肉和西兰花，帮我推荐低热量的菜",
+    "expected_tools": ["recipe_expert", "get_fridge_inventory"],
+    "expected_subagent": "recipe_expert",
+    "category": "recommend",
+    "difficulty": "medium",
+    "should_not_use": ["cooking_expert", "substitution_expert"]
+  }
+]

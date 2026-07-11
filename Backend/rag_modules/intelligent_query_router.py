@@ -71,8 +71,8 @@ class IntelligentQueryRouter:
         # ChatPromptTemplate + with_structured_output 调用
         try:
             analysis_prompt = ANALYZE_QUERY.format(query=query)
-            structured_llm = self.llm_client.with_structured_output(QueryAnalysis)
-            analysis = structured_llm.invoke(analysis_prompt)
+            structured_llm = self.llm_client.with_structured_output(QueryAnalysis, method="json_mode")
+            analysis = structured_llm.invoke("Output JSON.\n" + analysis_prompt)
             logger.info(f"查询分析完成: {analysis.recommended_strategy.value} (置信度: {analysis.confidence:.2f})")
             return analysis
         except Exception as e:

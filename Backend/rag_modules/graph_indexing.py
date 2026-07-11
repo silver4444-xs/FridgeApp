@@ -284,8 +284,8 @@ class GraphIndexingModule:
                 target_type=target_entity.entity_type,
                 relation_type=relation_type,
             )
-            structured_llm = self.llm_client.with_structured_output(RelationKeysResult)
-            result = structured_llm.invoke(prompt)
+            structured_llm = self.llm_client.with_structured_output(RelationKeysResult, method="json_mode")
+            result = structured_llm.invoke("Output JSON.\n" + prompt)
             return result.keywords
         except Exception as e:
             logger.error(f"LLM增强关系索引键失败: {e}")

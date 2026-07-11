@@ -1,0 +1,352 @@
+[
+  {
+    "question": "如何让鸡肉更嫩？",
+    "ground_truth": "腌制时加入淀粉和蛋清，控制火候不要过老，鸡肉不宜久炒",
+    "category": "cooking_technique",
+    "difficulty": "medium",
+    "expected_entities": ["鸡肉", "淀粉", "蛋清"]
+  },
+  {
+    "question": "番茄炒蛋需要哪些食材？",
+    "ground_truth": "鸡蛋、番茄、葱、盐、糖、食用油",
+    "category": "recipe_detail",
+    "difficulty": "easy",
+    "expected_entities": ["鸡蛋", "番茄", "葱"]
+  },
+  {
+    "question": "川菜有什么特点？",
+    "ground_truth": "以麻辣为主，善用辣椒和花椒，调味多变，代表菜有宫保鸡丁、麻婆豆腐、回锅肉、水煮鱼",
+    "category": "cuisine_knowledge",
+    "difficulty": "medium",
+    "expected_entities": ["川菜", "辣椒", "花椒", "宫保鸡丁", "麻婆豆腐"]
+  },
+  {
+    "question": "煎鱼怎么不粘锅？",
+    "ground_truth": "锅要烧热再放油，鱼身擦干水分，可在鱼身拍一层薄淀粉，中火煎至定型再翻面，不要频繁翻动",
+    "category": "cooking_technique",
+    "difficulty": "medium",
+    "expected_entities": ["鱼", "油", "淀粉"]
+  },
+  {
+    "question": "怎样挑选新鲜的鸡蛋？",
+    "ground_truth": "看蛋壳是否粗糙有光泽，摇晃无声，放入水中沉底为新鲜，浮起则不新鲜",
+    "category": "ingredient_knowledge",
+    "difficulty": "easy",
+    "expected_entities": ["鸡蛋"]
+  },
+  {
+    "question": "宫保鸡丁的烹饪步骤？",
+    "ground_truth": "鸡胸肉切丁腌制，花生炸脆备用，干辣椒花椒爆香，炒鸡丁至变色，加调料汁翻炒，最后放入花生拌匀出锅",
+    "category": "recipe_detail",
+    "difficulty": "medium",
+    "expected_entities": ["鸡胸肉", "花生", "干辣椒", "花椒"]
+  },
+  {
+    "question": "做红烧肉需要什么调料？",
+    "ground_truth": "生抽、老抽、冰糖、料酒、八角、桂皮、香叶、姜、葱",
+    "category": "recipe_detail",
+    "difficulty": "easy",
+    "expected_entities": ["红烧肉", "生抽", "老抽", "冰糖", "八角"]
+  },
+  {
+    "question": "鸡蛋和番茄能做什么菜？",
+    "ground_truth": "番茄炒蛋、番茄蛋花汤、番茄鸡蛋面、番茄鸡蛋盖饭",
+    "category": "ingredient_pairing",
+    "difficulty": "easy",
+    "expected_entities": ["鸡蛋", "番茄"]
+  },
+  {
+    "question": "牛奶可以做什么甜品？",
+    "ground_truth": "双皮奶、牛奶炖蛋、姜撞奶、牛奶布丁、炸鲜奶",
+    "category": "ingredient_pairing",
+    "difficulty": "easy",
+    "expected_entities": ["牛奶", "甜品"]
+  },
+  {
+    "question": "猪肉不同部位怎么烹饪？",
+    "ground_truth": "里脊适合快炒和炸如糖醋里脊，五花肉适合红烧和回锅肉，排骨适合炖汤和红烧，梅花肉适合煎烤，前腿肉适合做肉馅",
+    "category": "ingredient_knowledge",
+    "difficulty": "medium",
+    "expected_entities": ["猪肉", "里脊", "五花肉", "排骨"]
+  },
+  {
+    "question": "如何去除羊肉的膻味？",
+    "ground_truth": "用料酒、姜片、花椒水浸泡，焯水时加白萝卜或茶叶或陈皮，烹饪时加孜然八角等香料",
+    "category": "cooking_technique",
+    "difficulty": "medium",
+    "expected_entities": ["羊肉", "料酒", "姜", "花椒"]
+  },
+  {
+    "question": "米饭和什么一起炒最好吃？",
+    "ground_truth": "蛋炒饭加鸡蛋和葱花，扬州炒饭加火腿虾仁青豆玉米，酱油炒饭加生抽老抽，菠萝炒饭加菠萝虾仁腰果",
+    "category": "ingredient_pairing",
+    "difficulty": "easy",
+    "expected_entities": ["米饭", "鸡蛋", "火腿", "虾仁"]
+  },
+  {
+    "question": "新手适合做什么菜？",
+    "ground_truth": "番茄炒蛋、拍黄瓜、蒸水蛋、清炒时蔬、可乐鸡翅等简单快手菜，不需要复杂刀工和火候控制",
+    "category": "beginner_friendly",
+    "difficulty": "easy",
+    "expected_entities": ["番茄炒蛋", "拍黄瓜", "蒸水蛋"]
+  },
+  {
+    "question": "糖醋排骨怎么做？",
+    "ground_truth": "排骨焯水去血沫，调糖醋汁用醋加糖加番茄酱加生抽，排骨先炸至金黄，另起锅倒入糖醋汁煮至浓稠，放入排骨翻炒裹汁，撒白芝麻出锅",
+    "category": "recipe_detail",
+    "difficulty": "medium",
+    "expected_entities": ["排骨", "糖", "醋"]
+  },
+  {
+    "question": "蔬菜如何保持翠绿？",
+    "ground_truth": "焯水时加少许盐和几滴油，焯水后立即过冷水或冰水，炒制时大火快炒，时间不宜过长",
+    "category": "cooking_technique",
+    "difficulty": "medium",
+    "expected_entities": ["蔬菜", "盐", "油"]
+  },
+  {
+    "question": "清蒸鱼的火候和时间怎么掌握？",
+    "ground_truth": "水开后放入鱼，大火蒸8-10分钟约500g的鱼，鱼眼凸出用筷子能轻松插入最厚处即熟，蒸好后倒掉盘中汁水去腥",
+    "category": "cooking_technique",
+    "difficulty": "medium",
+    "expected_entities": ["鱼", "蒸"]
+  },
+  {
+    "question": "干辣椒和新鲜辣椒在烹饪中有什么区别？",
+    "ground_truth": "干辣椒主要提供香味和麻辣感，适合爆香后用于川菜；新鲜辣椒提供清辣味和蔬菜口感，适合炒菜和凉拌。干辣椒剪段后用油爆香效果更好",
+    "category": "ingredient_knowledge",
+    "difficulty": "hard",
+    "expected_entities": ["干辣椒", "辣椒"]
+  },
+  {
+    "question": "鸡胸肉怎么做才不会柴？",
+    "ground_truth": "腌制时加蛋清和淀粉锁水，煎制时中火每面2-3分钟不要过久，也可以用盐水浸泡30分钟再烹饪，或采用低温慢煮的方法",
+    "category": "cooking_technique",
+    "difficulty": "medium",
+    "expected_entities": ["鸡胸肉", "蛋清", "淀粉"]
+  },
+  {
+    "question": "皮蛋瘦肉粥怎么做？",
+    "ground_truth": "大米提前浸泡，瘦肉切丝加淀粉腌制，皮蛋切丁。米煮至开花后加入肉丝和皮蛋，小火熬至浓稠，加盐白胡椒粉和葱花调味",
+    "category": "recipe_detail",
+    "difficulty": "medium",
+    "expected_entities": ["皮蛋", "瘦肉", "大米"]
+  },
+  {
+    "question": "没有黄油可以用什么代替？",
+    "ground_truth": "可用植物油如玉米油葵花籽油、椰子油或猪油代替。烘焙中用植物油口感偏干，用椰子油风味更接近。如果做饼干需要打发黄油的口感，较难完美替代",
+    "category": "substitution",
+    "difficulty": "easy",
+    "expected_entities": ["黄油", "植物油", "椰子油"]
+  },
+  {
+    "question": "生抽和老抽有什么区别？",
+    "ground_truth": "生抽颜色浅咸味重味道鲜，主要用于调味提鲜；老抽颜色深有焦糖色咸味淡，主要用于上色。红烧类菜式通常两者都用",
+    "category": "ingredient_knowledge",
+    "difficulty": "easy",
+    "expected_entities": ["生抽", "老抽"]
+  },
+  {
+    "question": "煲汤为什么不能用开水下肉？",
+    "ground_truth": "肉类冷水下锅焯水可以慢慢逼出血沫和腥味物质，如果开水下锅表面蛋白质瞬间凝固，内部的血水和腥味无法排出，影响汤的清澈和鲜美",
+    "category": "cooking_technique",
+    "difficulty": "medium",
+    "expected_entities": ["冷水", "肉", "焯水"]
+  },
+  {
+    "question": "粤菜有什么代表菜和特点？",
+    "ground_truth": "粤菜讲究食材新鲜口味清淡注重原味。代表菜有白切鸡、清蒸鱼、煲仔饭、烧鹅、虾饺、肠粉、老火靓汤。烹饪方法以蒸煲炒为主",
+    "category": "cuisine_knowledge",
+    "difficulty": "medium",
+    "expected_entities": ["粤菜", "白切鸡", "清蒸鱼", "煲仔饭"]
+  },
+  {
+    "question": "冰箱里的食材放久了不新鲜还能吃吗？",
+    "ground_truth": "需要分情况判断：蔬菜发黄变软但无腐烂可尽快食用；肉类变色有异味必须丢弃；鸡蛋放水中浮起则不新鲜不宜食用。遵循望闻问原则，有疑问宁可丢弃",
+    "category": "food_safety",
+    "difficulty": "medium",
+    "expected_entities": ["冰箱", "蔬菜", "肉类", "鸡蛋"]
+  },
+  {
+    "question": "做蛋糕没有低筋面粉怎么办？",
+    "ground_truth": "可用中筋面粉和玉米淀粉按4:1比例混合替代低筋面粉。或者全部用中筋面粉但口感会偏硬。也可用市售蛋糕粉直接替代",
+    "category": "substitution",
+    "difficulty": "medium",
+    "expected_entities": ["低筋面粉", "中筋面粉", "玉米淀粉"]
+  },
+  {
+    "question": "回锅肉怎么做好吃？",
+    "ground_truth": "选用二刀肉或五花肉，先整块煮至八分熟，切薄片后下锅煸炒出油至卷曲成灯盏窝，加豆瓣酱炒出红油，放蒜苗青椒翻炒，加甜面酱和生抽调味",
+    "category": "recipe_detail",
+    "difficulty": "medium",
+    "expected_entities": ["回锅肉", "五花肉", "豆瓣酱", "蒜苗"]
+  },
+  {
+    "question": "炒鸡蛋怎么炒才嫩滑？",
+    "ground_truth": "鸡蛋打散时加少许水或牛奶，一个蛋加一小勺，充分搅打出泡沫。热锅冷油，油温不要太高，下锅后用筷子快速搅动，蛋液凝固到七成即可关火，余温会让蛋完全凝固",
+    "category": "cooking_technique",
+    "difficulty": "easy",
+    "expected_entities": ["鸡蛋", "牛奶"]
+  },
+  {
+    "question": "有哪些适合夏天喝的汤？",
+    "ground_truth": "冬瓜排骨汤、绿豆汤、酸梅汤、丝瓜蛋汤、苦瓜排骨汤、西红柿鸡蛋汤、冬瓜海带汤。夏季以清淡降火祛湿消暑为主",
+    "category": "recipe_recommendation",
+    "difficulty": "easy",
+    "expected_entities": ["汤", "冬瓜", "绿豆", "苦瓜"]
+  },
+  {
+    "question": "煎牛排要什么火候？",
+    "ground_truth": "大火热锅，牛排两面各煎2-3分钟3cm厚度为五分熟。煎之前牛排要回温至室温并擦干表面，只在翻面时加黄油和蒜瓣。煎好后需要静置5分钟让肉汁回流",
+    "category": "cooking_technique",
+    "difficulty": "medium",
+    "expected_entities": ["牛排", "黄油"]
+  },
+  {
+    "question": "厨房新手需要准备哪些基本调料？",
+    "ground_truth": "基础调料：盐、白糖、生抽、老抽、醋、料酒、蚝油。香料：八角、花椒、桂皮、香叶。油类：食用油、芝麻油。进阶可加豆瓣酱、番茄酱、黑胡椒粉",
+    "category": "beginner_friendly",
+    "difficulty": "easy",
+    "expected_entities": ["盐", "生抽", "醋", "料酒"]
+  },
+  {
+    "question": "豆腐有哪些常见做法？",
+    "ground_truth": "麻婆豆腐、家常豆腐、凉拌豆腐、红烧豆腐、豆腐汤、锅塌豆腐、豆腐煲。嫩豆腐适合凉拌和做汤，老豆腐适合煎炸和红烧",
+    "category": "ingredient_pairing",
+    "difficulty": "easy",
+    "expected_entities": ["豆腐", "麻婆豆腐", "凉拌豆腐"]
+  },
+  {
+    "question": "卤牛肉怎么做？",
+    "ground_truth": "牛腱子肉焯水去血沫，准备卤料包含八角桂皮香叶花椒草果丁香，锅中加水生抽老抽冰糖盐和卤料包，放入牛肉大火煮开后转小火卤1.5-2小时，关火后在卤汁中浸泡数小时更入味，冷却后切片",
+    "category": "recipe_detail",
+    "difficulty": "medium",
+    "expected_entities": ["牛肉", "卤料", "八角", "桂皮"]
+  },
+  {
+    "question": "淀粉有哪些种类？分别适合做什么？",
+    "ground_truth": "玉米淀粉最常用适合勾芡上浆挂糊。土豆淀粉勾芡光泽好适合做锅包肉。红薯淀粉颗粒粗适合炸制外皮酥脆。木薯淀粉适合做珍珠奶茶的珍珠。绿豆淀粉适合做凉粉",
+    "category": "ingredient_knowledge",
+    "difficulty": "hard",
+    "expected_entities": ["淀粉", "玉米淀粉", "土豆淀粉", "红薯淀粉"]
+  },
+  {
+    "question": "辣椒炒肉怎么做？",
+    "ground_truth": "猪肉切片加生抽料酒淀粉腌制。青辣椒斜切。热油先炒肉片至变色盛出，锅中底油爆香蒜末姜丝，放入辣椒炒至表皮微焦起皱，倒回肉片，加生抽蚝油少许白糖翻炒均匀出锅",
+    "category": "recipe_detail",
+    "difficulty": "easy",
+    "expected_entities": ["猪肉", "辣椒", "生抽", "蒜"]
+  },
+  {
+    "question": "怎么做一桌适合招待客人的菜？",
+    "ground_truth": "建议4凉4热1汤：凉菜可选拍黄瓜、皮蛋豆腐、酱牛肉、口水鸡；热菜可选红烧排骨、清蒸鱼、宫保鸡丁、清炒时蔬；汤品可选玉米排骨汤或酸辣汤。冷热搭配荤素均衡提前备菜",
+    "category": "meal_planning",
+    "difficulty": "hard",
+    "expected_entities": ["凉菜", "热菜", "汤"]
+  },
+  {
+    "question": "没有电饭煲怎么蒸米饭？",
+    "ground_truth": "用普通锅也可以：米洗净加水米水比例约1:1.2，中火烧开后转最小火，盖上锅盖焖15-20分钟，关火后再焖5分钟。注意全程不要开盖",
+    "category": "kitchen_equipment",
+    "difficulty": "easy",
+    "expected_entities": ["米饭", "锅"]
+  },
+  {
+    "question": "炒菜时什么时候放盐最合适？",
+    "ground_truth": "分情况：炒青菜出锅前放盐可以保持脆嫩不出水；炖肉开始时放盐会收紧肉质导致不入味，应在炖至七八成熟时放；做汤最后调味放盐；凉拌菜提前放盐可以入味",
+    "category": "cooking_technique",
+    "difficulty": "easy",
+    "expected_entities": ["盐"]
+  },
+  {
+    "question": "白切鸡怎么做皮脆肉嫩？",
+    "ground_truth": "选用三黄鸡，水开后放入鸡浸烫三次即三提三放，然后小火浸泡25-30分钟至熟，捞出立即放入冰水中浸泡使皮收紧变脆。蘸料用姜蓉葱花盐和热油调制",
+    "category": "recipe_detail",
+    "difficulty": "hard",
+    "expected_entities": ["鸡", "姜", "冰水"]
+  },
+  {
+    "question": "炒糖色怎么炒？",
+    "ground_truth": "锅中小火放油和冰糖或白糖，不断搅拌，糖融化后先冒大泡再变小泡，颜色从白变黄再变枣红色时立即关火或倒入食材，再炒几秒就会变苦。新手建议用水炒法：糖加水1:1小火慢熬更易掌控",
+    "category": "cooking_technique",
+    "difficulty": "hard",
+    "expected_entities": ["糖", "冰糖", "油"]
+  },
+  {
+    "question": "淮扬菜有什么特点？",
+    "ground_truth": "淮扬菜讲究刀工精细口味清淡平和原汁原味火候精准。代表菜有狮子头、大煮干丝、松鼠桂鱼、蟹粉豆腐、扬州炒饭。以炖焖煨蒸为主要烹饪手法",
+    "category": "cuisine_knowledge",
+    "difficulty": "medium",
+    "expected_entities": ["淮扬菜", "狮子头", "大煮干丝", "松鼠桂鱼"]
+  },
+  {
+    "question": "素菜怎么做才好吃？",
+    "ground_truth": "关键是大火快炒保持脆嫩，用蒜末或姜末爆锅增加香味，适量使用蚝油或生抽提鲜。根茎类蔬菜先焯水再炒。凉拌菜加少许糖可以提鲜。素菜不要炒太久",
+    "category": "cooking_technique",
+    "difficulty": "easy",
+    "expected_entities": ["蔬菜", "蒜", "蚝油"]
+  },
+  {
+    "question": "面包糠没有了怎么炸东西？",
+    "ground_truth": "可用压碎的薯片玉米片替代面包糠，或用面粉加鸡蛋液加碾碎的饼干。也可以把干馒头或吐司揉碎替代。应急时只用面粉加蛋液裹两遍也能炸出酥脆口感",
+    "category": "substitution",
+    "difficulty": "easy",
+    "expected_entities": ["面包糠", "面粉", "薯片", "鸡蛋"]
+  },
+  {
+    "question": "大闸蟹怎么蒸？蘸料怎么配？",
+    "ground_truth": "蟹刷洗干净，肚朝上放入蒸锅防止蟹黄流失，每只蟹上放一片姜。水开后大火蒸15-20分钟视大小。蘸料用姜末加香醋加少许白糖。蟹性寒配姜茶或黄酒食用",
+    "category": "recipe_detail",
+    "difficulty": "medium",
+    "expected_entities": ["蟹", "姜", "醋"]
+  },
+  {
+    "question": "如何判断油温？",
+    "ground_truth": "三成热约90℃油面平静插入筷子无反应适合滑油。五成热约150℃油面微微波动筷子周围有细小气泡适合炒菜。七成热约180℃油面冒青烟筷子周围气泡密集适合炸制。八成热以上容易烧焦食材",
+    "category": "cooking_technique",
+    "difficulty": "medium",
+    "expected_entities": ["油温", "筷子"]
+  },
+  {
+    "question": "有哪些适合上班族的快手菜？",
+    "ground_truth": "番茄炒蛋10分钟、青椒肉丝15分钟、可乐鸡翅20分钟、蚝油生菜5分钟、蒜蓉西兰花10分钟。可以提前一晚备好食材切好，下班回来直接炒",
+    "category": "meal_planning",
+    "difficulty": "easy",
+    "expected_entities": ["番茄炒蛋", "快手菜", "上班族"]
+  },
+  {
+    "question": "粉蒸肉怎么做？",
+    "ground_truth": "五花肉切片，加生抽老抽料酒豆瓣酱姜末腌制30分钟。裹上蒸肉粉用米粉加五香粉，土豆或红薯切块垫底，肉片铺在上面，上锅蒸1-1.5小时至肉酥烂",
+    "category": "recipe_detail",
+    "difficulty": "medium",
+    "expected_entities": ["五花肉", "蒸肉粉", "米粉"]
+  },
+  {
+    "question": "包菜和什么一起炒好吃？",
+    "ground_truth": "手撕包菜炒五花肉加干辣椒和花椒、包菜炒粉丝加鸡蛋、包菜炒腊肠、包菜炒虾皮。包菜用手撕比刀切更好吃，大火快炒保持爽脆",
+    "category": "ingredient_pairing",
+    "difficulty": "easy",
+    "expected_entities": ["包菜", "五花肉", "粉丝"]
+  },
+  {
+    "question": "吃不完的食材怎么保存？",
+    "ground_truth": "绿叶菜用厨房纸巾包裹放入保鲜袋冷藏；肉类分装按顿分包冷冻避免反复解冻；葱姜蒜切碎后冷冻保存；熟食冷藏不超过3天；冰箱冷藏室温度建议设4℃以下，冷冻室-18℃以下",
+    "category": "food_safety",
+    "difficulty": "easy",
+    "expected_entities": ["保存", "冷藏", "冷冻", "冰箱"]
+  },
+  {
+    "question": "微波炉除了热菜还能做什么？",
+    "ground_truth": "可以用来做蒸水蛋中火2分钟、蒸鱼高火5-8分钟、烤红薯高火8-10分钟、融化巧克力或黄油、快速发泡木耳、消毒抹布。带壳鸡蛋和密闭容器不能放入微波炉",
+    "category": "kitchen_equipment",
+    "difficulty": "easy",
+    "expected_entities": ["微波炉"]
+  },
+  {
+    "question": "鲁菜有什么代表菜和特点？",
+    "ground_truth": "鲁菜以咸鲜为主讲究调汤火候精湛爆炒见长。代表菜有葱烧海参、九转大肠、糖醋鲤鱼、油焖大虾、德州扒鸡、锅塌豆腐。是北方菜系的代表",
+    "category": "cuisine_knowledge",
+    "difficulty": "medium",
+    "expected_entities": ["鲁菜", "葱烧海参", "九转大肠", "糖醋鲤鱼"]
+  }
+]

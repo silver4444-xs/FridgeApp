@@ -3,7 +3,7 @@
 from langchain_core.prompts import ChatPromptTemplate
 
 EXTRACT_QUERY_KEYWORDS = ChatPromptTemplate.from_messages([
-    ("system", """作为烹饪知识助手，请分析以下查询并提取关键词，分为两个层次：
+    ("system", """作为烹饪知识助手，请分析以下查询并提取关键词，输出JSON格式结果，分为两个层次：
 
 提取规则：
 1. 实体级关键词：具体的食材、菜品名称、工具、品牌等有形实体

@@ -149,8 +149,8 @@ class GraphRAGRetrieval:
         # ChatPromptTemplate + with_structured_output 调用
         try:
             prompt = UNDERSTAND_GRAPH_QUERY.format(query=query)
-            structured_llm = self.llm_client.with_structured_output(GraphQuery)
-            return structured_llm.invoke(prompt)
+            structured_llm = self.llm_client.with_structured_output(GraphQuery, method="json_mode")
+            return structured_llm.invoke("Output JSON.\n" + prompt)
         except Exception as e:
             logger.error(f"查询意图理解失败: {e}")
             # 降级方案：默认子图查询
