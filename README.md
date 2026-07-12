@@ -1,128 +1,332 @@
-# FridgeAI — 智能冰箱食材管理与菜谱推荐系统
+<div align="center">
 
-基于 OneNET IoT 云平台 + LangChain/LangGraph AI Agent 的智能冰箱系统。RK3588 边缘节点上报食材数据，FastAPI 后端提供 323 道菜谱的 RAG 智能推荐，uni-app 前端支持流式 AI 对话。
+# 🧊 FridgeAI — AI-Powered Smart Fridge & Recipe Recommendation System
 
-## 架构概览
+**An intelligent kitchen assistant powered by LangGraph Agents, GraphRAG (Neo4j), and Vector Search (Milvus).**
+
+[![GitHub Stars](https://img.shields.io/github/stars/silver4444-xs/FridgeApp?style=for-the-badge&color=fbbf24)](https://github.com/silver4444-xs/FridgeApp/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/silver4444-xs/FridgeApp?style=for-the-badge&color=0891b2)](https://github.com/silver4444-xs/FridgeApp/network/members)
+[![License](https://img.shields.io/github/license/silver4444-xs/FridgeApp?style=for-the-badge&color=22c55e)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![LangChain](https://img.shields.io/badge/LangChain-1.3-1c3c3c?style=for-the-badge&logo=chainlink)](https://langchain.com/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-1.2-1c3c3c?style=for-the-badge)](https://langchain-ai.github.io/langgraph/)
+
+</div>
+
+---
+
+## 📖 Overview / 项目概述
+
+**EN:** FridgeAI is a full-stack AI application that turns a smart fridge into an intelligent kitchen assistant. It connects to IoT sensors via OneNET MQTT to track ingredients in real-time, then uses LangGraph-powered AI agents with GraphRAG (Neo4j knowledge graph + Milvus vector database) to recommend recipes, suggest ingredient substitutions, and answer cooking questions — all through a natural conversational interface.
+
+**CN:** FridgeAI 是一个全栈 AI 应用，将智能冰箱变成厨房助手。通过 OneNET MQTT 连接 IoT 传感器实时追踪食材，使用 LangGraph 驱动的 AI Agent 结合 GraphRAG (Neo4j 知识图谱 + Milvus 向量数据库) 进行菜谱推荐、食材替换建议和烹饪问答——全部通过自然语言对话界面完成。
+
+> **323 recipes** · **12 categories** · **3 AI sub-agents** · **GraphRAG retrieval** · **Streaming chat** · **Mobile-first UI**
+
+---
+
+## 🎬 Quick Demo / 快速演示
+
+> 📸 Screenshots coming soon. In the meantime, here's what you can do:
+
+| 🧊 **Fridge Inventory** | 💬 **AI Chat** | 📋 **Recipe Detail** | 🔍 **Smart Search** |
+|:---:|:---:|:---:|:---:|
+| Real-time IoT sync | Streaming Agent | Step-by-step guide | GraphRAG-powered |
+| Auto-polling from OneNET | Token-level typewriter | Ingredient tags + tips | BM25 + Vector hybrid |
+| Manual add/edit/delete | Tool call progress | Category badges + images | 80+ synonym groups |
+
+---
+
+## 🚀 Quick Start / 快速开始
+
+### Prerequisites / 环境要求
+
+| Service | Version | Required | Purpose |
+|---------|---------|----------|---------|
+| Python | 3.12+ | Required | Backend runtime |
+| Conda | any | Recommended | Environment management |
+| Neo4j | 5.x | Required | GraphRAG knowledge graph |
+| Milvus | 2.3+ | Required | Vector search & retrieval |
+| DeepSeek API Key | — | Required | LLM (get at [platform.deepseek.com](https://platform.deepseek.com)) |
+| HBuilderX | latest | Required (frontend) | uni-app IDE |
+
+### 3-Step Setup / 三步安装
+
+```bash
+# 1. Clone & install dependencies
+git clone https://github.com/silver4444-xs/FridgeApp.git
+cd FridgeApp/Backend
+conda create -n cook-rag-1 python=3.12 -y && conda activate cook-rag-1
+pip install -r requirements.txt
+
+# 2. Set environment variables
+cp .env.example .env
+# Edit .env: add DEEPSEEK_API_KEY, NEO4J_URI/PASSWORD, MILVUS_HOST
+
+# 3. Start the server
+uvicorn api.server:app --host 0.0.0.0 --port 8000 --reload
+# Open http://localhost:8000/docs for Swagger API docs
+```
+
+**Frontend:** Open `Frontend/` in HBuilderX, configure the API base URL, and run on device/emulator.
+
+---
+
+## 🏗️ Architecture / 系统架构
+
+### System Overview / 系统总览
+
+```mermaid
+graph TB
+    subgraph "📱 Frontend (uni-app)"
+        A[Vue 3 Mobile App]
+        A1[Fridge Inventory]
+        A2[AI Chat]
+        A3[Recipe Browser]
+    end
+
+    subgraph "⚡ Backend (FastAPI)"
+        B[WebSocket Server]
+        C[REST API]
+        D[LangGraph Agent]
+    end
+
+    subgraph "🧠 AI Agent Stack"
+        E[Main Agent<br/>Fridge Assistant]
+        F1[recipe_expert]
+        F2[substitution_expert]
+        F3[cooking_expert]
+        G[5-Layer Middleware]
+    end
+
+    subgraph "🔍 RAG System (GraphRAG)"
+        H[IntelligentQueryRouter]
+        I[Neo4j<br/>Knowledge Graph]
+        J[Milvus<br/>Vector DB]
+        K[HybridRetrieval<br/>BM25 + Vector]
+    end
+
+    subgraph "🌐 IoT Layer"
+        L[OneNET Cloud]
+        M[RK3588 Edge<br/>MQTT Client]
+    end
+
+    A <-->|WebSocket| B
+    A -->|HTTP| C
+    C --> D
+    D --> E
+    E --> F1 & F2 & F3
+    E --> G
+    F1 & F3 --> H
+    H --> I & J & K
+    B --> L
+    L <-->|MQTT| M
+    M -->|"Sensor Data"| N[Smart Fridge]
+```
+
+### Agent Workflow / Agent 工作流
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant W as WebSocket
+    participant A as Main Agent
+    participant R as recipe_expert
+    participant G as GraphRAG
+    participant D as RecipeDB
+
+    U->>W: "冰箱里有什么？推荐几道菜"
+    W->>A: invoke(messages)
+    A->>A: get_fridge_inventory()
+    A-->>A: [鸡蛋×6, 西红柿×3, ...]
+    A->>R: recommend_by_fridge(preferences)
+    R->>G: ask_question_with_routing()
+    G->>D: hybrid search
+    D-->>G: top-10 results
+    G-->>R: retrieved context
+    R-->>A: structured recommendations
+    A-->>W: stream_tokens
+    W-->>U: "🍳 推荐以下菜品..."
+```
+
+---
+
+## ✨ Features / 核心功能
+
+### AI Agent / 智能对话
+
+| Feature | Description |
+|---------|-------------|
+| 🧠 **Multi-Agent Architecture** | 3 specialized sub-agents: recipe expert, substitution expert, cooking knowledge expert |
+| 💬 **Streaming Chat** | Real-time token streaming via WebSocket with typing indicators |
+| 🔄 **HITL Approval** | Human-in-the-loop interrupt for preference saving — user must approve before changes persist |
+| 📝 **Rich Markdown** | Tables, dividers, blockquotes, inline code, bold/italic, recipe image injection |
+| 🛡️ **5-Layer Middleware** | Rate limit (15/run), summarization (4K tokens), HITL, model retry (3x), tool retry (2x) |
+
+### Recipe & Food / 菜谱与食材
+
+| Feature | Description |
+|---------|-------------|
+| 📚 **323 Recipes** | 12 categories: meat, vegetable, seafood, soup, staple, dessert, drink, breakfast, etc. |
+| 🔍 **Smart Search** | Search by ingredient (80+ synonym groups) or recipe name with fuzzy matching |
+| 📋 **Recipe Detail** | Step-by-step guide, ingredient tags, tips, category badges, recipe images |
+| 🍳 **Substitution** | Intelligent ingredient substitution suggestions (e.g., butter → olive oil) |
+| ⚡ **Real-time Sync** | IoT sensor data via OneNET MQTT → fridge inventory auto-update |
+
+### RAG & Knowledge / 知识检索
+
+| Feature | Description |
+|---------|-------------|
+| 🕸️ **GraphRAG** | Neo4j knowledge graph with entity-relation retrieval for complex cooking queries |
+| 🔢 **Vector Search** | Milvus-powered semantic search with BAAI/bge-small-zh-v1.5 embeddings |
+| 🧭 **Intelligent Routing** | Auto-select retrieval strategy: hybrid_traditional / graph_rag / combined |
+| 🧪 **Evaluation Framework** | 50 Ragas test cases + 12 DeepEval agent tool-selection tests |
+
+---
+
+## 🤔 Why FridgeAI? / 为什么选择 FridgeAI?
+
+Unlike simple recipe apps that use keyword matching, FridgeAI combines **symbolic knowledge (Neo4j graph)** with **semantic search (Milvus vectors)** through a LangGraph agent that can reason about your ingredients, preferences, and cooking constraints in natural conversation.
+
+| | Traditional Recipe Apps | FridgeAI |
+|---|:---:|:---:|
+| Search method | Keyword match | GraphRAG + Vector hybrid |
+| Ingredient awareness | Manual input | IoT auto-sync + manual |
+| Dietary preferences | Rigid filters | Conversational AI memory |
+| Ingredient substitution | None or hardcoded | LLM-powered reasoning |
+| Cooking Q&A | Static FAQ | Streaming Agent with RAG |
+| Multi-turn context | None | LangGraph checkpointer |
+| Offline capability | None | 323 local recipes |
+
+---
+
+## 🛠️ Tech Stack / 技术栈
+
+| Layer | Technology | Version | Purpose |
+|-------|-----------|---------|---------|
+| **AI Agent** | LangChain + LangGraph | 1.3 / 1.2 | Agent orchestration, middleware, state management |
+| **LLM** | DeepSeek V4 Flash | — | Primary LLM (via OpenAI-compatible API) |
+| **Backend** | FastAPI + Uvicorn | 0.115+ | REST API + WebSocket server |
+| **Vector DB** | Milvus | 2.3+ | Semantic search, BAAI/bge-small-zh-v1.5 embeddings |
+| **Graph DB** | Neo4j | 5.x | Knowledge graph, entity-relation reasoning |
+| **Frontend** | uni-app (Vue 3) | 3.x | Cross-platform mobile app (iOS/Android/Web/MiniApp) |
+| **IoT** | OneNET Cloud + MQTT | — | Real-time fridge sensor data sync |
+| **Edge** | RK3588 | — | On-device MQTT client, sensor data collection |
+| **Embeddings** | sentence-transformers | 5.3 | BAAI/bge-small-zh-v1.5 (Chinese-optimized) |
+| **Evaluation** | Ragas + DeepEval | 0.4.3 | RAG retrieval quality + Agent tool selection testing |
+| **Observability** | LangSmith | 0.3+ | LLM tracing and monitoring |
+
+---
+
+## 🔧 Agent Tools / Agent 工具
+
+| Tool | Runtime | Description |
+|------|---------|-------------|
+| `get_fridge_inventory` | context | Read fridge ingredient list |
+| `recommend_by_fridge` | context | Recommend recipes based on inventory (with dietary filtering) |
+| `search_recipes_by_ingredients` | — | Explicit ingredient search |
+| `get_recipe_detail` | — | Full recipe details |
+| `find_substitutions` | — | Ingredient substitution suggestions |
+| `search_cooking_knowledge` | — | RAG cooking knowledge Q&A |
+| `save_user_preferences` | context+store | Persist user preferences |
+| `get_user_preferences` | context+store | Read saved preferences |
+
+## 🤖 Sub-Agents / 子 Agent
+
+| Sub-Agent | Tools | Description |
+|-----------|-------|-------------|
+| `recipe_expert` | recommend_by_fridge + search_recipes + get_detail | Recipe recommendation (Structured Output) |
+| `substitution_expert` | find_substitutions | Ingredient substitution (temperature=0.0) |
+| `cooking_expert` | search_cooking_knowledge | Cooking knowledge RAG |
+
+## 🛡️ Middleware Stack
 
 ```
-前端 (uni-app / Vue 3)
-  │ WebSocket /ws/fridge (数据推送) + /ws/chat (AI 对话)
-  ▼
-后端 (FastAPI + LangChain v1 + LangGraph)
-  │ HTTP API (iot-api.heclouds.com)
-  ▼
-OneNET IoT Cloud
-  │ MQTT (mqtts.heclouds.com:1883)
-  ▼
-RK3588 边缘节点 — 冰箱传感器 + SQLite
+1. ModelCallLimitMiddleware   max 15 model calls per run
+2. SummarizationMiddleware    auto-summarize when >4000 tokens
+3. HumanInTheLoopMiddleware   write operations require approval
+4. ModelRetryMiddleware       LLM API fault tolerance (3 retries, exponential backoff)
+5. ToolRetryMiddleware        Tool fault tolerance (2 retries)
 ```
 
-## 核心特性
+---
 
-### AI Agent 对话
+## 📡 API Reference / 接口参考
 
-- **Subagents 多 Agent 协作**: 主 Agent 协调 3 个专业子 Agent（菜谱推荐/食材替换/烹饪知识）
-- **5 层 Middleware**: ModelCallLimit → Summarization → HumanInTheLoop → ModelRetry → ToolRetry
-- **Long-term Memory**: 用户偏好跨会话持久化（忌口/偏好菜系/人数）
-- **流式输出**: `/ws/chat` token 级打字机效果 + 工具调用进度
-- **Human-in-the-Loop**: 写操作需人工审批
-- **Structured Output**: 菜谱推荐/食材替换返回结构化 JSON
+### WebSocket `/ws/fridge`
 
-### 食材管理与推荐
+| Type | Direction | Description |
+|------|-----------|-------------|
+| `food_update` | B→F | Full inventory push |
+| `food_upload` | F→B | Frontend upload |
+| `ack` | B→F | Upload queued |
+| `upload_status` | B→F | Upload status |
 
-- **323 道菜谱**: RAG 混合检索（Neo4j 知识图谱 + Milvus HNSW 向量索引 + BM25）
-- **倒排索引 + 模糊匹配**: 29 项食材别名 + 循环去前缀
-- **智能推荐**: 基于冰箱库存自动推荐可制作菜谱，支持忌口过滤
+### WebSocket `/ws/chat`
 
-### IoT 数据同步
+| Type | Direction | Description |
+|------|-----------|-------------|
+| `chat` | F→B | User message |
+| `stream_token` | B→F | LLM token (typewriter) |
+| `stream_tool_start` | B→F | Tool call started |
+| `stream_tool_end` | B→F | Tool call completed |
+| `stream_tool_error` | B→F | Tool call error |
+| `stream_done` | B→F | Response complete |
 
-- **HTTP 自适应轮询** (500ms→30s): 从 OneNET 拉取冰箱库存
-- **上传队列**: 防抖 + 指数退避重试(3次) + 死信持久化
-- **WebSocket 实时推送**: `/ws/fridge` 双向数据同步
+### REST Endpoints
 
-## 技术栈
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/recommend` | Get recipe recommendations |
+| `GET` | `/api/search` | Search recipes by name or ingredients |
+| `GET` | `/api/recipe/{id}` | Get recipe detail |
+| `GET` | `/api/substitutions` | Find ingredient substitutions |
+| `POST` | `/api/chat` | REST fallback for AI chat |
 
-| 层级 | 技术 |
-|------|------|
-| **AI Agent** | LangChain v1 (`create_agent`, `@tool`, `Middleware`) |
-| **状态管理** | LangGraph (`StateGraph`, `InMemorySaver`, `InMemoryStore`) |
-| **后端框架** | FastAPI + WebSocket |
-| **LLM** | DeepSeek v4 (flash / pro) |
-| **向量数据库** | Milvus (HNSW, 512-dim) |
-| **图数据库** | Neo4j (Recipe-Ingredient 知识图谱) |
-| **前端** | uni-app (Vue 3) / HBuilderX |
-| **IoT 平台** | OneNET Studio (China Mobile) |
-| **异步 HTTP** | httpx (连接池) |
+---
 
-## 目录结构
+## 📁 Project Structure / 目录结构
 
 ```
 FridgeApp/
-├── Frontend/                       # uni-app 移动端
+├── Frontend/                       # uni-app mobile app
 │   ├── pages/
-│   │   ├── home/home.vue           # 冰箱主页 — 食材管理
-│   │   ├── recipes/recipes.vue     # 智能食谱 — AI 推荐 + 对话
-│   │   ├── add/add.vue             # 添加食材
-│   │   └── settings/settings.vue   # 设置 — IP 配置
+│   │   ├── home/home.vue           # Fridge inventory management
+│   │   ├── recipes/recipes.vue     # AI recommendation + chat
+│   │   ├── add/add.vue             # Add ingredients
+│   │   └── settings/settings.vue   # Settings — IP config
 │   └── utils/
-│       ├── store.js                # 响应式数据中心
-│       ├── cloudSync.js            # OneNET WS 数据同步
-│       ├── agentChat.js            # Agent 流式对话客户端
-│       └── imageResolver.js        # 5 级图片回退
+│       ├── store.js                # Reactive data center
+│       ├── cloudSync.js            # OneNET WS data sync
+│       ├── agentChat.js            # Agent streaming chat client
+│       └── imageResolver.js        # 5-level image fallback
 │
 ├── Backend/
 │   ├── api/
-│   │   ├── server.py               # FastAPI 入口 + lifespan
-│   │   ├── dependencies.py         # 全局单例 (7 项)
-│   │   ├── onenet_relay.py         # OneNET HTTP 轮询 + 上传队列
-│   │   ├── ws_relay.py             # /ws/fridge 数据推送
-│   │   ├── chat_relay.py           # /ws/chat Agent 流式对话
-│   │   ├── tools.py                # 8 个 @tool + FridgeContext
-│   │   ├── subagents.py            # 3 个专业子 Agent
+│   │   ├── server.py               # FastAPI entry + lifespan
+│   │   ├── dependencies.py         # Global singletons (7 items)
+│   │   ├── onenet_relay.py         # OneNET HTTP polling + upload queue
+│   │   ├── ws_relay.py             # /ws/fridge data push
+│   │   ├── chat_relay.py           # /ws/chat Agent streaming
+│   │   ├── tools.py                # 8 @tool + FridgeContext
+│   │   ├── subagents.py            # 3 specialized sub-agents
 │   │   ├── graph.py                # LangGraph StateGraph
-│   │   ├── models.py               # Pydantic 数据模型
-│   │   └── routes/                 # REST: recommend/search/detail/substitutions
-│   ├── matching/                   # 倒排索引 + 模糊匹配
+│   │   ├── models.py               # Pydantic data models
+│   │   └── routes/                 # REST endpoints
+│   ├── matching/                   # Inverted index + fuzzy matching
 │   ├── rag_modules/                # Neo4j + Milvus + Hybrid RAG
-│   ├── prompts/                    # ChatPromptTemplate 模板
-│   ├── main.py                     # RAG系统 + Agent 工厂函数
+│   ├── prompts/                    # ChatPromptTemplate templates
+│   ├── tests/                      # Unit + Ragas + DeepEval tests
+│   ├── main.py                     # RAG system + Agent factory
 │   └── config.py                   # GraphRAGConfig
 │
-└── docs/                           # 设计文档
-    ├── LangChain_LangGraph_改进方案.md
-    ├── LangChain_LangGraph_最新改进建议_2026-06-29.md
-    └── Middleware体系改造方案.md
+└── docs/                           # Design documents
 ```
 
-## 快速开始
+---
 
-### 环境要求
-
-- Python 3.9+
-- Neo4j (localhost:7687)
-- Milvus (localhost:19530)
-- DeepSeek API Key
-- HBuilderX (前端)
-
-### 后端启动
-
-```bash
-cd Backend
-pip install -r requirements.txt
-
-# 配置 .env（参考 .env.example）
-# 必填: DEEPSEEK_API_KEY
-
-uvicorn api.server:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### 前端启动
-
-HBuilder X 打开 `Frontend/` → 运行 → 内置浏览器 (H5)
-
-手机端：设置页填入 PC 局域网 IP（4 段数字），确保同一 WiFi
-
-## Agent 调用
+## Agent 调用示例
 
 ```python
 from api.dependencies import get_fridge_agent
@@ -138,70 +342,74 @@ result = agent.invoke(
     ),
 )
 
-# 多轮对话 (thread_id 继承历史)
+# Multi-turn conversation (thread_id preserves history)
 from api.dependencies import get_fridge_graph
 graph = get_fridge_graph()
 config = {"configurable": {"thread_id": "user_001"}}
-graph.invoke({"messages": [...]}, config=config)  # 第 2 轮继承上文
+graph.invoke({"messages": [...]}, config=config)  # Round 2 inherits context
 ```
 
-## WebSocket 协议
+---
 
-### /ws/fridge
+## ❓ FAQ / 常见问题
 
-| type | 方向 | 说明 |
-|------|------|------|
-| `food_update` | B→F | 全量食材推送 |
-| `food_upload` | F→B | 前端上传 |
-| `ack` | B→F | 上传已入队 |
-| `upload_status` | B→F | 上传状态 |
+<details>
+<summary><b>How is this different from a regular recipe app? / 这和普通菜谱 App 有什么不同？</b></summary>
 
-### /ws/chat
+FridgeAI uses AI agents with GraphRAG to understand your ingredients and preferences in natural language. Instead of searching by keyword, you can say "what can I make without dairy?" and the agent reasons about substitutions and constraints.
+</details>
 
-| type | 方向 | 说明 |
-|------|------|------|
-| `chat` | F→B | 用户消息 |
-| `stream_token` | B→F | LLM token（打字机） |
-| `stream_tool_start` | B→F | 工具调用开始 |
-| `stream_done` | B→F | 响应完成 |
+<details>
+<summary><b>What LLM does it use? Can I switch models? / 用什么大模型？能换吗？</b></summary>
 
-## Agent 工具
+Default: DeepSeek V4 Flash via OpenAI-compatible API. You can switch to any OpenAI-compatible model (GPT-4, Claude via proxy, local models) by changing `OPENAI_API_BASE` and model name in `.env`.
+</details>
 
-| 工具 | 说明 |
-|------|------|
-| `get_fridge_inventory` | 读取冰箱食材清单 |
-| `recommend_by_fridge` | 基于食材推荐菜谱(含忌口过滤) |
-| `search_recipes_by_ingredients` | 显式食材搜索 |
-| `get_recipe_detail` | 菜谱完整详情 |
-| `find_substitutions` | 食材替换建议 |
-| `search_cooking_knowledge` | RAG 烹饪知识问答 |
-| `save_user_preferences` | 保存偏好到长期记忆 |
-| `get_user_preferences` | 读取已保存的偏好 |
+<details>
+<summary><b>Does it work without internet? / 没网络能用吗？</b></summary>
 
-## Middleware 栈
+The 323 local recipes are always available offline. AI chat and RAG retrieval require internet (DeepSeek API). The IoT sync requires OneNET connectivity.
+</details>
 
-```
-1. ModelCallLimitMiddleware   单次最多 15 次模型调用
-2. SummarizationMiddleware    超 4000 token 自动摘要压缩
-3. HumanInTheLoopMiddleware   写操作需人工审批
-4. ModelRetryMiddleware       LLM API 容错重试 (3次)
-5. ToolRetryMiddleware        工具容错重试 (2次)
-```
+<details>
+<summary><b>How do I add my own recipes? / 怎么添加自己的菜谱？</b></summary>
 
-## 子 Agent
+Add Markdown files to `Backend/data/dishes/` and `Frontend/data/dishes/` following the template format. They'll be indexed on next server restart.
+</details>
 
-| 子 Agent | 底层工具 | 说明 |
-|----------|---------|------|
-| `recipe_expert` | recommend_by_fridge + search_recipes + get_detail | 菜谱推荐全流程 |
-| `substitution_expert` | find_substitutions | 食材替换 (temperature=0.0) |
-| `cooking_expert` | search_cooking_knowledge | 烹饪知识 RAG |
+<details>
+<summary><b>Is it production-ready? / 能用于生产环境吗？</b></summary>
 
-## 已知限制
+Currently in active development (Phase 8 completed). Known P0 issues: hardcoded credentials, in-memory state storage (lost on restart). See [Known Limitations](#%EF%B8%8F-known-limitations--%E5%B7%B2%E7%9F%A5%E9%99%90%E5%88%B6).
+</details>
 
-- `InMemorySaver`/`InMemoryStore` 重启丢数据 → 生产需换 `PostgresSaver`/`PostgresStore`
-- 无自动化测试
-- 管道格式分隔符 `|` 和 `;` 与食材名冲突风险
+---
 
-## 许可证
+## ⚠️ Known Limitations / 已知限制
 
-MIT
+- `InMemorySaver`/`InMemoryStore` lose data on restart → production needs `PostgresSaver`/`PostgresStore`
+- Hardcoded credentials in `onenet_relay.py` — needs env var migration
+- No Docker/CI-CD — planned for Phase 9
+- Pipe delimiter `|` and `;` in ingredient names may conflict with parsing
+
+---
+
+## ⭐ Star History / 星标历史
+
+[![Star History Chart](https://api.star-history.com/svg?repos=silver4444-xs/FridgeApp&type=Date)](https://star-history.com/#silver4444-xs/FridgeApp&Date)
+
+## 🤝 Contributing / 参与贡献
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feat/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+4. Push to the branch (`git push origin feat/amazing-feature`)
+5. Open a Pull Request
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines and [CLAUDE.md](CLAUDE.md) for development notes.
+
+## 📄 License / 许可证
+
+MIT © FridgeAI Contributors — see [LICENSE](LICENSE) for details.
