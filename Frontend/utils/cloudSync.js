@@ -2,6 +2,7 @@
  * 云端同步服务 — 通过后端 WebSocket (自动重连)
  */
 import { store } from './store.js'
+import { getWsUrl } from '@/config/app.js'
 
 let backendWsTask = null
 let reconnectTimer = null
@@ -9,8 +10,7 @@ let reconnectTimer = null
 export function connectBackendWs() {
 	if (backendWsTask) { try { backendWsTask.close({}) } catch (_) {}; backendWsTask = null }
 	try {
-		const backendUrl = uni.getStorageSync('backend_url') || 'http://localhost:8000'
-		const wsUrl = backendUrl.replace(/^http/, 'ws') + '/ws/fridge'
+		const wsUrl = getWsUrl('/ws/fridge')
 		console.log('[CloudSync] Connecting WS:', wsUrl)
 		backendWsTask = uni.connectSocket({ url: wsUrl, complete: () => {} })
 

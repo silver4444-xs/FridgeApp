@@ -4,15 +4,12 @@
 
 import imageMapping from '@/data/image_mapping.json'
 import { ZH_TO_EN } from './foodData.js'
+import { getStaticUrl } from '@/config/app.js'
 
 const _mapping = imageMapping || { ingredients: {}, recipes: {} }
 
 function getImageBase() {
-	try {
-		const stored = uni.getStorageSync('backend_url')
-		if (stored) return stored.replace(/\/+$/, '') + '/static/images/'
-	} catch (e) { /* ignore */ }
-	return 'http://localhost:8000/static/images/'
+	return getStaticUrl('')
 }
 
 function resolveImagePath(relativePath) {

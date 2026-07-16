@@ -6,6 +6,7 @@
 
 import json
 import logging
+import re
 from typing import List, Dict, Tuple, Any
 from dataclasses import dataclass
 
@@ -133,6 +134,21 @@ class HybridRetrievalModule:
             
         return relationships
             
+    def _keyword_match_score(self, keyword: str, target: str) -> float:
+        """计算关键词与目标文本的匹配度 [0, 1]"""
+        if not keyword or not target:
+            return 0.0
+        if keyword == target:
+            return 1.0
+        if keyword in target or target in keyword:
+            return 0.8
+        # 字符级 Jaccard 相似度
+        kw_set = set(keyword)
+        tgt_set = set(target)
+        if not tgt_set:
+            return 0.0
+        return len(kw_set & tgt_set) / len(kw_set | tgt_set)
+
     def extract_query_keywords(self, query: str) -> Tuple[List[str], List[str]]:
         """
         提取查询关键词：实体级 + 主题级
@@ -140,20 +156,25 @@ class HybridRetrievalModule:
 
         # ChatPromptTemplate + with_structured_output 调用
         try:
-            prompt = EXTRACT_QUERY_KEYWORDS.format(query=query)
-            structured_llm = self.llm_client.with_structured_output(KeywordsResult, method="json_mode")
-            result = structured_llm.invoke("Output JSON.\n" + prompt)
+            messages = EXTRACT_QUERY_KEYWORDS.format_prompt(query=query)
+            structured_llm = self.llm_client.with_structured_output(KeywordsResult, method="function_calling")
+            result = structured_llm.invoke(messages)
             entity_keywords = result.entity_keywords
             topic_keywords = result.topic_keywords
             logger.info(f"关键词提取完成 - 实体级: {entity_keywords}, 主题级: {topic_keywords}")
             return entity_keywords, topic_keywords
         except Exception as e:
             logger.error(f"关键词提取失败: {e}")
-            # 降级方案：简单的关键词分割
-            keywords = query.split()
-            return keywords[:3], keywords[3:6] if len(keywords) > 3 else keywords
+            # 降级方案：中文用正则提取连续汉字/英文词，英文用空格分割
+            chars = re.findall(r'[一-鿿]{2,}|\w{2,}', query)
+            if chars:
+                return chars[:5], chars[:3]
+            # 最终兜底：字符级二元组分词
+            clean = re.sub(r'[^一-鿿\w]', '', query)
+            bigrams = [clean[i:i+2] for i in range(0, len(clean)-1, 2)]
+            return bigrams[:5], bigrams[:3]
     
-    def entity_level_retrieval(self, entity_keywords: List[str], top_k: int = 5) -> List[RetrievalResult]:
+    def entity_level_retrieval(self, entity_keywords: List[str], top_k: int = 10) -> List[RetrievalResult]:
         """
         实体级检索：专注于具体实体和关系
         使用图索引的键值对结构进行检索
@@ -174,14 +195,17 @@ class HybridRetrievalModule:
                 if neighbors:
                     enhanced_content += f"\n相关信息: {', '.join(neighbors)}"
                 
+                # 基于关键词与实体名的相似度计算真实相关性分数
+                entity_name = entity.entity_name
+                score = self._keyword_match_score(keyword, entity_name)
                 results.append(RetrievalResult(
                     content=enhanced_content,
                     node_id=entity.metadata["node_id"],
                     node_type=entity.entity_type,
-                    relevance_score=0.9,  # 精确匹配得分较高
+                    relevance_score=score,
                     retrieval_level="entity",
                     metadata={
-                        "entity_name": entity.entity_name,
+                        "entity_name": entity_name,
                         "entity_type": entity.entity_type,
                         "index_keys": entity.index_keys,
                         "matched_keyword": keyword
@@ -236,7 +260,7 @@ class HybridRetrievalModule:
                         content='\n'.join(content_parts),
                         node_id=record["node_id"],
                         node_type="Recipe",
-                        relevance_score=float(record["score"]) * 0.7,  # 补充检索得分较低
+                        relevance_score=float(record["score"]),  # 保留 Neo4j 原始全文检索分数
                         retrieval_level="entity",
                         metadata={
                             "name": record["name"],
@@ -250,7 +274,7 @@ class HybridRetrievalModule:
             
         return results
     
-    def topic_level_retrieval(self, topic_keywords: List[str], top_k: int = 5) -> List[RetrievalResult]:
+    def topic_level_retrieval(self, topic_keywords: List[str], top_k: int = 10) -> List[RetrievalResult]:
         """
         主题级检索：专注于广泛主题和概念
         使用图索引的关系键值对结构进行主题检索
@@ -281,11 +305,12 @@ class HybridRetrievalModule:
                         newline = '\n'
                         content_parts.append(f"菜品详情: {source_entity.value_content.split(newline)[0]}")
                     
+                    score = self._keyword_match_score(keyword, source_entity.entity_name)
                     results.append(RetrievalResult(
                         content='\n'.join(content_parts),
-                        node_id=relation.source_entity,  # 以主要实体为ID
+                        node_id=relation.source_entity,
                         node_type=source_entity.entity_type,
-                        relevance_score=0.95,  # 主题匹配得分
+                        relevance_score=score,
                         retrieval_level="topic",
                         metadata={
                             "relation_id": relation.relation_id,
@@ -308,11 +333,12 @@ class HybridRetrievalModule:
                         entity.value_content
                     ]
                     
+                    score = self._keyword_match_score(keyword, entity.entity_name)
                     results.append(RetrievalResult(
                         content='\n'.join(content_parts),
                         node_id=entity.metadata["node_id"],
                         node_type=entity.entity_type,
-                        relevance_score=0.85,  # 分类匹配得分
+                        relevance_score=score * 0.85,  # 分类匹配略低于直接名称匹配
                         retrieval_level="topic",
                         metadata={
                             "entity_name": entity.entity_name,
@@ -384,7 +410,7 @@ class HybridRetrievalModule:
                         content='\n'.join(content_parts),
                         node_id=record["node_id"],
                         node_type="Recipe",
-                        relevance_score=0.75,  # 补充检索得分
+                        relevance_score=0.60,  # CONTAINS 部分匹配，得分低于全文检索
                         retrieval_level="topic",
                         metadata={
                             "name": record["name"],
@@ -401,7 +427,7 @@ class HybridRetrievalModule:
             
         return results
         
-    def dual_level_retrieval(self, query: str, top_k: int = 5) -> List[Document]:
+    def dual_level_retrieval(self, query: str, top_k: int = 10) -> List[Document]:
         """
         双层检索：结合实体级和主题级检索
         """
@@ -449,7 +475,7 @@ class HybridRetrievalModule:
         logger.info(f"双层检索完成，返回 {len(documents)} 个文档")
         return documents
     
-    def vector_search_enhanced(self, query: str, top_k: int = 5) -> List[Document]:
+    def vector_search_enhanced(self, query: str, top_k: int = 10) -> List[Document]:
         """
         增强的向量检索：结合图信息
         """
@@ -513,58 +539,76 @@ class HybridRetrievalModule:
             logger.error(f"获取邻居节点失败: {e}")
             return []
     
-    def hybrid_search(self, query: str, top_k: int = 5) -> List[Document]:
+    def hybrid_search(self, query: str, top_k: int = 10) -> List[Document]:
         """
-        混合检索：使用Round-robin轮询合并策略
-        公平轮询合并不同检索结果，不使用权重配置
+        混合检索：三路融合 (BM25 + 向量 + 图索引)
+        加权合并: BM25 0.3, 向量 0.5, 图索引 0.2
         """
         logger.info(f"开始混合检索: {query}")
-        
-        # 1. 双层检索（实体+主题检索）
+
+        # 1. 双层检索（实体+主题检索，来自图索引）
         dual_docs = self.dual_level_retrieval(query, top_k)
-        
-        # 2. 增强向量检索
+
+        # 2. 增强向量检索 (Milvus)
         vector_docs = self.vector_search_enhanced(query, top_k)
-        
-        # 3. Round-robin轮询合并
-        merged_docs = []
+
+        # 3. BM25 关键词检索
+        bm25_docs = []
+        if self.bm25_retriever:
+            try:
+                bm25_raw = self.bm25_retriever.invoke(query)
+                for rank, doc in enumerate(bm25_raw[:top_k]):
+                    doc.metadata["search_method"] = "bm25"
+                    doc.metadata["bm25_rank"] = rank
+                    doc.metadata["final_score"] = 1.0 / (1.0 + rank)  # rank-based scoring
+                    bm25_docs.append(doc)
+                logger.info(f"BM25检索: {len(bm25_docs)} 个结果")
+            except Exception as e:
+                logger.error(f"BM25检索失败: {e}")
+
+        # 4. 三路加权融合
+        all_candidates = []
+
+        for doc in dual_docs:
+            doc.metadata["search_method"] = "dual_level"
+            doc.metadata["final_score"] = doc.metadata.get("relevance_score", 0.0) * 0.2
+            all_candidates.append(doc)
+
+        for doc in vector_docs:
+            doc.metadata["search_method"] = "vector_enhanced"
+            vector_score = doc.metadata.get("score", 0.0)
+            similarity = max(0.0, min(1.0, vector_score))
+            doc.metadata["final_score"] = similarity * 0.5
+            all_candidates.append(doc)
+
+        for doc in bm25_docs:
+            doc.metadata["final_score"] = doc.metadata["final_score"] * 0.3
+            all_candidates.append(doc)
+
+        # 5. doc_type 域加权: cooking_knowledge 文档在通用烹饪问题中偏低,
+        #    因为图索引的关键词精确匹配天然偏向菜谱实体。给予 cooking_knowledge
+        #    适度的分数补偿 (1.4x), 菜谱文档保持不变 (1.0x)。
+        max_dual_score = max(
+            (d.metadata.get("relevance_score", 0.0) for d in dual_docs), default=0.0)
+        ck_boost = 1.0 if max_dual_score > 0.8 else 1.4
+        for doc in all_candidates:
+            if doc.metadata.get("doc_type") == "cooking_knowledge":
+                doc.metadata["final_score"] = doc.metadata["final_score"] * ck_boost
+
+        # 6. 去重 + 按 final_score 降序排序
         seen_doc_ids = set()
-        max_len = max(len(dual_docs), len(vector_docs))
-        origin_len = len(dual_docs) + len(vector_docs)
-        
-        for i in range(max_len):
-            # 先添加双层检索结果
-            if i < len(dual_docs):
-                doc = dual_docs[i]
-                doc_id = doc.metadata.get("node_id", hash(doc.page_content))
-                if doc_id not in seen_doc_ids:
-                    seen_doc_ids.add(doc_id)
-                    doc.metadata["search_method"] = "dual_level"
-                    doc.metadata["round_robin_order"] = len(merged_docs)
-                    # 设置统一的final_score字段
-                    doc.metadata["final_score"] = doc.metadata.get("relevance_score", 0.0)
-                    merged_docs.append(doc)
-            
-            # 再添加向量检索结果
-            if i < len(vector_docs):
-                doc = vector_docs[i]
-                doc_id = doc.metadata.get("node_id", hash(doc.page_content))
-                if doc_id not in seen_doc_ids:
-                    seen_doc_ids.add(doc_id)
-                    doc.metadata["search_method"] = "vector_enhanced"
-                    doc.metadata["round_robin_order"] = len(merged_docs)
-                    # 设置统一的final_score字段（向量得分需要转换）
-                    vector_score = doc.metadata.get("score", 0.0)
-                    # COSINE距离转换为相似度：distance越小，相似度越高
-                    similarity_score = max(0.0, 1.0 - vector_score) if vector_score <= 1.0 else 0.0
-                    doc.metadata["final_score"] = similarity_score
-                    merged_docs.append(doc)
-        
-        # 取前top_k个结果
+        merged_docs = []
+        for doc in sorted(all_candidates, key=lambda d: d.metadata["final_score"], reverse=True):
+            doc_id = doc.metadata.get("node_id", hash(doc.page_content))
+            if doc_id not in seen_doc_ids:
+                seen_doc_ids.add(doc_id)
+                doc.metadata["merge_order"] = len(merged_docs)
+                merged_docs.append(doc)
+
         final_docs = merged_docs[:top_k]
-        
-        logger.info(f"Round-robin合并：从总共{origin_len}个结果合并为{len(final_docs)}个文档")
-        logger.info(f"混合检索完成，返回 {len(final_docs)} 个文档")
+
+        logger.info(f"三路融合：从共{len(all_candidates)}个候选合并为{len(final_docs)}个文档"
+                    f" (dual:{len(dual_docs)} vec:{len(vector_docs)} bm25:{len(bm25_docs)})")
         return final_docs
         
     def close(self):

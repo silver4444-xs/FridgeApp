@@ -9,7 +9,7 @@
 **FridgeAI** — 基于 OneNET IoT 云平台的智能冰箱食材管理与菜谱推荐系统。
 
 - **RK3588 边缘节点** → MQTT (`mqtts.heclouds.com:1883`) → OneNET → Backend HTTP 轮询 → WebSocket → uni-app 前端
-- **OneNET 产品**: `OAgTJW6fph`，主设备: `device_01`
+- **OneNET 产品**: 通过 `ONENET_PRODUCT_ID` 环境变量配置，主设备: `device_01`
 - **后端启动**: `cd Backend && uvicorn api.server:app --host 0.0.0.0 --port 8000 --reload`
 - **Python**: 3.9+，类型注解使用 `Optional[X]`
 
@@ -119,7 +119,7 @@ generation_integration.py:
 | 配置 | 值 |
 |------|-----|
 | Neo4j URI | `bolt://localhost:7687` |
-| Neo4j DB | `neo4j` (密码: `all-in-rag`) |
+| Neo4j DB | `neo4j` (密码通过 `NEO4J_PASSWORD` 环境变量配置) |
 | Milvus | `localhost:19530` |
 | 集合名 | `cooking_knowledge` |
 | 嵌入模型 | `BAAI/bge-small-zh-v1.5` (512 维) |

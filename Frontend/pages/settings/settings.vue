@@ -26,8 +26,8 @@
 					<view class="si-left">
 						<view class="si-icon cyan"><text class="material-icons" style="font-size:18px;">dns</text></view>
 						<view style="flex:1;">
-							<text class="si-label">图片服务器地址</text>
-							<text class="si-desc">只填电脑局域网IP的4段数字</text>
+							<text class="si-label">后端服务器地址</text>
+							<text class="si-desc">局域网用IP四段，云服务器用下方完整URL</text>
 						</view>
 					</view>
 				</view>
@@ -43,7 +43,14 @@
 						<input class="ip-input" type="number" maxlength="3" v-model="ip4" placeholder="1" @input="onIpInput(4)" />
 						<text class="url-fixed">:8000</text>
 					</view>
-					<view class="url-btn" @click="saveBackendUrl">保存</view>
+					<view class="url-btn" @click="saveBackendUrl">保存IP地址</view>
+				</view>
+				<view class="url-input-row" style="margin-top: 8rpx;">
+					<view class="ip-row">
+						<text class="url-fixed" style="font-size:12px;color:var(--text-muted);">完整URL:</text>
+						<input class="ip-input" style="flex:1;min-width:200rpx;text-align:left;padding-left:8px;" type="text" v-model="backendUrlInput" placeholder="https://your-domain.com" />
+					</view>
+					<view class="url-btn" style="background:var(--accent-green);" @click="saveBackendUrlFull">保存域名</view>
 				</view>
 			</view>
 
@@ -84,6 +91,7 @@ export default {
 			config: getConfig(),
 			toastVisible: false, toastMsg: '', toastTimer: null,
 			ip1: '', ip2: '', ip3: '', ip4: '',
+			backendUrlInput: '',
 		}
 	},
 	computed: {
@@ -100,6 +108,8 @@ export default {
 				const m = stored.match(/\/\/(\d+)\.(\d+)\.(\d+)\.(\d+)/)
 				if (m) {
 					this.ip1 = m[1]; this.ip2 = m[2]; this.ip3 = m[3]; this.ip4 = m[4]
+				} else if (stored && stored !== 'http://0.0.0.0:8000') {
+					this.backendUrlInput = stored
 				}
 			} catch (e) {}
 		},
@@ -120,6 +130,13 @@ export default {
 			const url = 'http://' + parts.map(v => parseInt(v)).join('.') + ':8000'
 			uni.setStorageSync('backend_url', url)
 			this.showToast('已保存: ' + url)
+		},
+		saveBackendUrlFull() {
+			const url = this.backendUrlInput.trim()
+			if (!url) { this.showToast('请输入完整URL'); return }
+			const fullUrl = url.match(/^https?:\/\//) ? url : 'https://' + url
+			uni.setStorageSync('backend_url', fullUrl.replace(/\/+$/, ''))
+			this.showToast('已保存: ' + fullUrl.replace(/\/+$/, ''))
 		},
 		exportData() {
 			const data = JSON.stringify(store.foods, null, 2)

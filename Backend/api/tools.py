@@ -321,7 +321,7 @@ def search_cooking_knowledge(question: str) -> str:
         }, ensure_ascii=False)
 
     try:
-        result, analysis = rag_system.ask_question_with_routing(
+        result, analysis, _ = rag_system.ask_question_with_routing(
             question, stream=False
         )
         return result if isinstance(result, str) else str(result)

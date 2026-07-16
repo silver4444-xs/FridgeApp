@@ -3,6 +3,7 @@ Milvus索引构建模块
 """
 
 import logging
+import os
 import time
 from typing import List, Dict, Any, Optional
 
@@ -61,17 +62,23 @@ class MilvusIndexConstructionModule:
         return str(text)[:max_length]
     
     def _setup_client(self):
-        """初始化Milvus客户端"""
+        """初始化Milvus客户端 (支持 Lite/Standalone 模式)"""
         try:
-            self.client = MilvusClient(
-                uri=f"http://{self.host}:{self.port}"
-            )
-            logger.info(f"已连接到Milvus服务器: {self.host}:{self.port}")
-            
+            milvus_mode = os.getenv("MILVUS_MODE", "standalone")
+            if milvus_mode == "lite":
+                lite_path = os.getenv("MILVUS_LITE_PATH", "./milvus_lite.db")
+                self.client = MilvusClient(uri=lite_path)
+                logger.info(f"Milvus Lite 模式: {lite_path}")
+            else:
+                self.client = MilvusClient(
+                    uri=f"http://{self.host}:{self.port}"
+                )
+                logger.info(f"已连接到Milvus服务器: {self.host}:{self.port}")
+
             # 测试连接
             collections = self.client.list_collections()
             logger.info(f"连接成功，当前集合: {collections}")
-            
+
         except Exception as e:
             logger.error(f"连接Milvus失败: {e}")
             raise
@@ -79,13 +86,17 @@ class MilvusIndexConstructionModule:
     def _setup_embeddings(self):
         """初始化嵌入模型"""
         logger.info(f"正在初始化嵌入模型: {self.model_name}")
-        
+
+        cache_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".hf_cache")
+        os.makedirs(cache_dir, exist_ok=True)
+
         self.embeddings = HuggingFaceEmbeddings(
             model_name=self.model_name,
             model_kwargs={'device': 'cpu'},
-            encode_kwargs={'normalize_embeddings': True}
+            encode_kwargs={'normalize_embeddings': True},
+            cache_folder=cache_dir,
         )
-        
+
         logger.info("嵌入模型初始化完成")
     
     def _create_collection_schema(self) -> CollectionSchema:

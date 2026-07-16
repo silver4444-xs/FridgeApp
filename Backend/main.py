@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from dotenv import load_dotenv
-from config import DEFAULT_CONFIG, GraphRAGConfig
+from config import get_default_config, GraphRAGConfig
 from rag_modules import (
     GraphDataPreparationModule,
     MilvusIndexConstructionModule,
@@ -44,7 +44,7 @@ class AdvancedGraphRAGSystem:
     """
 
     def __init__(self, config: Optional[GraphRAGConfig] = None):
-        self.config = config or DEFAULT_CONFIG
+        self.config = config or get_default_config()
 
         # 核心模块
         self.data_module = None
@@ -72,6 +72,7 @@ class AdvancedGraphRAGSystem:
                 password=self.config.neo4j_password,
                 database=self.config.neo4j_database
             )
+            self.data_module.ensure_fulltext_indexes()
 
             # 2. 向量索引模块
             print("初始化Milvus向量索引...")
@@ -143,6 +144,8 @@ class AdvancedGraphRAGSystem:
                         chunk_size=self.config.chunk_size,
                         chunk_overlap=self.config.chunk_overlap
                     )
+                    ck_docs = self.data_module.build_cooking_knowledge_documents()
+                    chunks.extend(ck_docs)
 
                     self._initialize_retrievers(chunks)
                     return
@@ -165,6 +168,11 @@ class AdvancedGraphRAGSystem:
                 chunk_size=self.config.chunk_size,
                 chunk_overlap=self.config.chunk_overlap
             )
+
+            # 加载烹饪知识文档
+            print("加载烹饪知识文档...")
+            ck_docs = self.data_module.build_cooking_knowledge_documents()
+            chunks.extend(ck_docs)
 
             # 构建Milvus向量索引
             print("构建Milvus向量索引...")
@@ -268,8 +276,7 @@ class AdvancedGraphRAGSystem:
                 if len(doc_info) > 3:
                     print(f"    等 {len(relevant_docs)} 个结果...")
             else:
-                # 保持返回值签名一致：始终返回 (result, analysis)
-                return "抱歉，没有找到相关的烹饪信息。请尝试其他问题。", analysis
+                return "抱歉，没有找到相关的烹饪信息。请尝试其他问题。", analysis, []
 
             # 4. 生成回答
             print("🎯 智能生成回答...")
@@ -292,11 +299,11 @@ class AdvancedGraphRAGSystem:
             end_time = time.time()
             print(f"\n⏱️ 问答完成，耗时: {end_time - start_time:.2f}秒")
 
-            return result, analysis
+            return result, analysis, relevant_docs
 
         except Exception as e:
             logger.error(f"问答处理失败: {e}")
-            return f"抱歉，处理问题时出现错误：{str(e)}", None
+            return f"抱歉，处理问题时出现错误：{str(e)}", None, []
 
     def run_interactive(self):
         """运行交互式问答"""
@@ -333,7 +340,7 @@ class AdvancedGraphRAGSystem:
 
                 print("\n回答:")
 
-                result, analysis = self.ask_question_with_routing(
+                result, analysis, _ = self.ask_question_with_routing(
                     user_input,
                     stream=use_stream,
                     explain_routing=explain_routing
@@ -457,7 +464,7 @@ def main():
 #   - 无需手工编排路由→检索→生成流程
 #   - 自动获得 tool-calling 错误处理、流式输出、对话持久化能力
 
-def create_fridge_agent(model_name: str = "deepseek-v4-flash",
+def create_fridge_agent(model_name: str = None,
                         temperature: float = 0.1,
                         max_tokens: int = 2048,
                         use_context: bool = True,
@@ -472,8 +479,11 @@ def create_fridge_agent(model_name: str = "deepseek-v4-flash",
       "context"  — V2: 8 个 tool + ToolRuntime 上下文感知 (默认)
       "subagents"— V3: 6 个 tool (3 直属 + 3 子 Agent) Phase 6
 
+    if model_name is None:
+        model_name = os.getenv("LLM_MODEL", "deepseek-v4-flash")
+
     Args:
-        model_name: 模型名称 (使用 DeepSeek)
+        model_name: 模型名称 (默认从 LLM_MODEL 环境变量读取，回退 deepseek-v4-flash)
         temperature: 生成温度
         max_tokens: 最大 token 数
         use_context: (兼容旧参数) True→agent_mode="context"
@@ -558,12 +568,16 @@ def create_fridge_agent(model_name: str = "deepseek-v4-flash",
         logger.info("FridgeAgent: Basic 模式 (V1) — 4 tools")
 
     # ── 模型初始化 ──
+    import httpx
     model = init_chat_model(
         f"openai:{model_name}",
         temperature=temperature,
         max_tokens=max_tokens,
         openai_api_key=os.getenv("DEEPSEEK_API_KEY"),
-        openai_api_base="https://api.deepseek.com/v1",
+        openai_api_base=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
+        http_client=httpx.Client(
+            timeout=httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0),
+        ),
     )
 
     # ── 系统提示词 ──
@@ -810,11 +824,11 @@ def create_fridge_graph_wrapper(rag_system: "AdvancedGraphRAGSystem" = None,
 
         # 多轮对话 (相同 thread_id 自动继承上下文)
         config = {"configurable": {"thread_id": "user_abc"}}
-        r1 = graph.invoke(
+        r1 = await graph.ainvoke(
             {"messages": [{"role": "user", "content": "能做什么菜?"}]},
             config=config,
         )
-        r2 = graph.invoke(
+        r2 = await graph.ainvoke(
             {"messages": [{"role": "user", "content": "第一个菜的具体步骤?"}]},
             config=config,  # 相同 thread_id → 自动继承上文
         )

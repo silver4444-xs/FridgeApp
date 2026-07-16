@@ -22,12 +22,22 @@ import httpx
 logger = logging.getLogger(__name__)
 
 ONENET_CONFIG = {
-    "productId": os.getenv("ONENET_PRODUCT_ID", "OAgTJW6fph"),
+    "productId": os.getenv("ONENET_PRODUCT_ID"),
     "deviceName": os.getenv("ONENET_DEVICE_NAME", "device_01"),
-    "deviceSecret": os.getenv("ONENET_DEVICE_SECRET", "bFY1YWlrdmJ4eDB4c3o2c2U1MnpuSUNKUG03dVZuZno="),
-    "accessKey": os.getenv("ONENET_ACCESS_KEY", "oR2pXSsfacONMQGjZ3+TtWN79S+npUepxSklYeHBK5s="),
+    "deviceSecret": os.getenv("ONENET_DEVICE_SECRET"),
+    "accessKey": os.getenv("ONENET_ACCESS_KEY"),
     "baseUrl": "https://iot-api.heclouds.com",
 }
+
+# 启动时校验必需凭证，缺失时给出可操作的错误信息
+_missing = [k for k in ("productId", "deviceSecret", "accessKey") if not ONENET_CONFIG[k]]
+if _missing:
+    _vars = {"productId": "ONENET_PRODUCT_ID", "deviceSecret": "ONENET_DEVICE_SECRET", "accessKey": "ONENET_ACCESS_KEY"}
+    _env_names = ", ".join(_vars[k] for k in _missing)
+    raise RuntimeError(
+        f"OneNET 凭证缺失: {_env_names} 未设置。"
+        f"请复制 .env.example 为 .env 并填入真实的 OneNET 凭证。"
+    )
 
 DEAD_LETTER_DIR = Path(__file__).parent.parent / "dead_letter"
 MAX_RETRIES = 3
@@ -192,18 +202,20 @@ class OneNetRelay:
 
     async def push_current(self, websocket):
         value = self._latest_upload or self._last_value
-        if value:
-            items = parse_compact_inventory(value)
-            if items:
-                payload = json.dumps(
-                    {"type": "food_update", "foodItems": items, "isSnapshot": True},
-                    ensure_ascii=False)
-                try:
-                    await websocket.send_text(payload)
-                    logger.info(f"[OneNet Relay] Pushed {len(items)} items to new client"
-                                f"{' (latest upload)' if self._latest_upload else ''}")
-                except Exception as e:
-                    logger.warning(f"[OneNet Relay] Push failed: {e}")
+        if not value:
+            value = FAKE_INVENTORY_PIPE
+            logger.info("[OneNet Relay] No live data, using fallback inventory for new client")
+        items = parse_compact_inventory(value)
+        if items:
+            payload = json.dumps(
+                {"type": "food_update", "foodItems": items, "isSnapshot": True},
+                ensure_ascii=False)
+            try:
+                await websocket.send_text(payload)
+                logger.info(f"[OneNet Relay] Pushed {len(items)} items to new client"
+                            f"{' (latest upload)' if self._latest_upload else ''}")
+            except Exception as e:
+                logger.warning(f"[OneNet Relay] Push failed: {e}")
 
     # ── 生命周期 ───────────────────────────────────────────
 
@@ -249,6 +261,7 @@ class OneNetRelay:
         if self._fallback_used:
             return
         self._fallback_used = True
+        self._last_value = FAKE_INVENTORY_PIPE
         items = parse_compact_inventory(FAKE_INVENTORY_PIPE)
         logger.warning(f"[OneNet Relay] Cloud unavailable, pushing {len(items)} fallback items")
         self._emit(items)

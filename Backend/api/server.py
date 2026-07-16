@@ -8,7 +8,8 @@ import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from api.auth import verify_api_key
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -71,10 +72,10 @@ async def lifespan(app: FastAPI):
 
     # ── RAG 系统 ──
     try:
-        from config import DEFAULT_CONFIG
+        from config import get_default_config
         from main import AdvancedGraphRAGSystem
 
-        _rag = AdvancedGraphRAGSystem(DEFAULT_CONFIG)
+        _rag = AdvancedGraphRAGSystem(get_default_config())
         _rag.initialize_system()
         _rag.build_knowledge_base()
 
@@ -84,27 +85,33 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"RAG 系统初始化失败: {e}")
 
-    # ── Phase 3.5: Long-term Memory —— 创建 Store ──
-    # InMemoryStore 跨会话持久化用户偏好 (开发模式)
-    # 生产环境替换为 PostgresStore
-    try:
-        from langgraph.store.memory import InMemoryStore
-        import api.dependencies as deps
-        deps.fridge_store = InMemoryStore()
-        logger.info("InMemoryStore 创建完成 (Phase 3.5)")
-    except Exception as e:
-        logger.warning(f"InMemoryStore 创建失败: {e}")
+    # ── Phase 3.5 + Phase 4: 持久化 Store + Checkpointer ──
+    # 使用 SQLite 替代 InMemory，数据在重启后保留
+    # 共享同一 DB 文件: checkpoints.db
+    import api.dependencies as deps
 
-    # ── Phase 4: HITL —— 创建 Checkpointer ──
-    # HumanInTheLoopMiddleware 依赖 checkpointer 保存中断状态
-    # Agent 和 Graph 共享同一 checkpointer 实例
+    # Store: 跨会话持久化用户偏好
     try:
-        from langgraph.checkpoint.memory import InMemorySaver
-        import api.dependencies as deps
-        deps.fridge_checkpointer = InMemorySaver()
-        logger.info("InMemorySaver 创建完成 (Phase 4: HITL)")
+        from api.persistent_store import SQLiteStore
+        _db_path = os.getenv("SQLITE_DB_PATH", "checkpoints.db")
+        deps.fridge_store = SQLiteStore(_db_path)
+        logger.info("SQLiteStore 创建完成 (用户偏好持久化)")
     except Exception as e:
-        logger.warning(f"InMemorySaver 创建失败: {e}")
+        logger.warning(f"SQLiteStore 创建失败，回退到 InMemoryStore: {e}")
+        from langgraph.store.memory import InMemoryStore
+        deps.fridge_store = InMemoryStore()
+
+    # Checkpointer: HITL 中断状态持久化
+    try:
+        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+        _db_path = os.getenv("SQLITE_DB_PATH", "checkpoints.db")
+        deps.fridge_checkpointer = AsyncSqliteSaver.from_conn_string(_db_path)
+        await deps.fridge_checkpointer.setup()
+        logger.info("AsyncSqliteSaver 创建完成 (HITL 状态持久化)")
+    except Exception as e:
+        logger.warning(f"AsyncSqliteSaver 创建失败，回退到 InMemorySaver: {e}")
+        from langgraph.checkpoint.memory import InMemorySaver
+        deps.fridge_checkpointer = InMemorySaver()
 
     # ── Phase 1: Agent 标准化 —— 创建 LangChain Agent ──
     # Phase 3.5: store + Phase 4: checkpointer
@@ -187,7 +194,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -197,13 +204,13 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 from api.ws_relay import router as ws_router, ws_fridge
 app.add_api_websocket_route("/ws/fridge", ws_fridge)
+
+# WebSocket 路由不使用 Depends (认证在连接握手阶段处理)
 app.include_router(ws_router)
 
 # ── Phase 5: 流式输出 —— Agent Chat WebSocket ──
-# 原代码: 无 Agent 对话端点，仅 OneNET 数据推送 /ws/fridge
-# 改进后: 新增 /ws/chat，graph.astream_events(v3) 实时推送 token
-from api.chat_relay import router as chat_router
-app.include_router(chat_router)
+from api.chat_relay import router as chat_ws_router
+app.include_router(chat_ws_router)
 
 from api.routes.recommend import router as recommend_router
 from api.routes.detail import router as detail_router
@@ -211,14 +218,25 @@ from api.routes.search import router as search_router
 from api.routes.substitutions import router as substitutions_router
 from api.routes.chat import router as chat_router
 
-app.include_router(chat_router, prefix="/api", tags=["对话"])
-app.include_router(recommend_router, prefix="/api/recipes", tags=["推荐"])
-app.include_router(search_router, prefix="/api/recipes", tags=["搜索"])
-app.include_router(detail_router, prefix="/api/recipes", tags=["详情"])
-app.include_router(substitutions_router, prefix="/api/recipes", tags=["替换建议"])
+_auth = [Depends(verify_api_key)]
+app.include_router(chat_router, prefix="/api", tags=["对话"], dependencies=_auth)
+app.include_router(recommend_router, prefix="/api/recipes", tags=["推荐"], dependencies=_auth)
+app.include_router(search_router, prefix="/api/recipes", tags=["搜索"], dependencies=_auth)
+app.include_router(detail_router, prefix="/api/recipes", tags=["详情"], dependencies=_auth)
+app.include_router(substitutions_router, prefix="/api/recipes", tags=["替换建议"], dependencies=_auth)
 
 
-@app.get("/api/health")
+@app.get("/api/health-public")
+def health_public():
+    """公开健康检查端点 (无需 API Key, 供 Docker/负载均衡器使用)"""
+    return {
+        "status": "ok",
+        "recipes_count": len(recipe_db),
+        "index_size": len(inverted_index),
+    }
+
+
+@app.get("/api/health", dependencies=[Depends(verify_api_key)])
 def health():
     return {
         "status": "ok",

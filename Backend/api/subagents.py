@@ -1,14 +1,14 @@
 """
-Phase 6 + Phase 8: Subagents 多 Agent 协作 + Structured Output
+Phase 6: Subagents 多 Agent 协作
 
 将 8 个单体 tool 拆分为 3 个专业子 Agent + 3 个主 Agent 直属 tool：
-- recipe_expert:       菜谱推荐 + 结构化输出 (AgentRecommendResponse)
-- substitution_expert: 食材替换 + 结构化输出 (AgentSubstitutionResponse)
+- recipe_expert:       菜谱推荐
+- substitution_expert: 食材替换
 - cooking_expert:      烹饪知识问答 (自由文本，适合非结构化知识)
 
-Phase 8: recipe_expert 和 substitution_expert 使用 response_format
-  LangChain 自动选择 ProviderStrategy 或 ToolStrategy
-  结构化结果以 JSON 字符串返回给主 Agent
+注意: recipe_expert 和 substitution_expert 不使用 response_format。
+ToolStrategy 在非 OpenAI/Anthropic/xAI 模型上不可靠。
+子 Agent 输出由主 Agent 消费，system_prompt 格式指令已足够。
 """
 import logging
 from langchain.agents import create_agent
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Shared model factory (子 Agent 共用)
 # ═══════════════════════════════════════════════════════════════
 
-def _make_model(model_name: str = "deepseek-v4-flash",
+def _make_model(model_name: str = None,
                 temperature: float = 0.1,
                 max_tokens: int = 2048,
                 disable_thinking: bool = False):
@@ -35,12 +35,14 @@ def _make_model(model_name: str = "deepseek-v4-flash",
     import os
     import httpx
     from langchain.chat_models import init_chat_model
+    if model_name is None:
+        model_name = os.getenv("LLM_MODEL", "deepseek-v4-flash")
     kwargs = dict(
         model=f"openai:{model_name}",
         temperature=temperature,
         max_tokens=max_tokens,
         openai_api_key=os.getenv("DEEPSEEK_API_KEY"),
-        openai_api_base="https://api.deepseek.com/v1",
+        openai_api_base=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
         http_client=httpx.Client(
             timeout=httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0),
         ),
@@ -66,11 +68,14 @@ def _get_model(temperature: float = 0.1, disable_thinking: bool = False):
 # 改进后: 1 个子 Agent 内部完成"分析需求→搜索→返回详情"全流程
 #  主 Agent 只需传自然语言 query，子 Agent 自主决策调用哪些底层 tool
 
-def _create_recipe_agent(model, tools, response_format=None, store=None, checkpointer=None):
-    """内部: 创建菜谱推荐子 Agent"""
+def _create_recipe_agent(model, tools, store=None, checkpointer=None):
+    """内部: 创建菜谱推荐子 Agent
+
+    注意: 不使用 response_format。
+    ToolStrategy 在 DeepSeek 上不可靠 (模型不调用隐藏 Respond 工具 → 循环重试)。
+    子 Agent 输出是给主 Agent 消费的，用 system_prompt 格式指令就足够了。
+    """
     kwargs = {}
-    if response_format is not None:
-        kwargs["response_format"] = response_format
     if store is not None:
         kwargs["store"] = store
     if checkpointer is not None:
@@ -108,37 +113,22 @@ _recipe_subagent = None
 _substitution_subagent = None
 _cooking_subagent = None
 
-@tool("recipe_expert", description="菜谱推荐专家：根据食材推荐可制作的菜谱、提供详细做法和步骤。返回结构化 JSON (含菜名/匹配数/缺少食材/难度/时间)。适用于「能做什么菜」「推荐几个菜」「XX菜怎么做」。")
+@tool("recipe_expert", description="菜谱推荐专家：根据食材推荐可制作的菜谱、提供详细做法和步骤。适用于「能做什么菜」「推荐几个菜」「XX菜怎么做」。")
 def call_recipe_expert(query: str) -> str:
-    """调用菜谱推荐子 Agent。
-
-    Args:
-        query: 用户的菜谱相关需求，如「冰箱里能做什么菜」「推荐3道川菜」「红烧肉怎么做」
-    """
+    """调用菜谱推荐子 Agent。"""
     from api.tools import (
         get_recipe_detail,
         recommend_by_fridge,
         search_recipes_by_ingredients,
     )
-    from api.models import AgentRecommendResponse
 
-    # ── 原代码: ──
-    # subagent = _create_recipe_agent(model, sub_tools)
-    # result = subagent.invoke(...)
-    # return result["messages"][-1].content  # 自由文本
-    #
-    # ── 改进后 (Phase 8: Structured Output): ──
-    # response_format=AgentRecommendResponse → LangChain 自动选择策略
-    # result["structured_response"] → AgentRecommendResponse 实例 → JSON 字符串
     global _recipe_subagent
     if _recipe_subagent is None:
         from api.tools import get_recipe_detail, recommend_by_fridge, search_recipes_by_ingredients
-        from api.models import AgentRecommendResponse
         from api.dependencies import fridge_store, fridge_checkpointer
         _recipe_subagent = _create_recipe_agent(
-            _get_model(disable_thinking=True),
+            _get_model(),
             [recommend_by_fridge, search_recipes_by_ingredients, get_recipe_detail],
-            response_format=AgentRecommendResponse,
             store=fridge_store,
             checkpointer=fridge_checkpointer,
         )
@@ -161,12 +151,13 @@ def call_recipe_expert(query: str) -> str:
 # 原代码: find_substitutions 独立 tool，与主 Agent 共用 LLM 实例
 # 改进后: 独立子 Agent，可配置更低的 temperature (替换建议需精确)
 
-def _create_substitution_agent(model, response_format=None, store=None, checkpointer=None):
-    """内部: 创建食材替换子 Agent"""
+def _create_substitution_agent(model, store=None, checkpointer=None):
+    """内部: 创建食材替换子 Agent
+
+    注意: 不使用 response_format (原因同 recipe_expert)。
+    """
     from api.tools import find_substitutions
     kwargs = {}
-    if response_format is not None:
-        kwargs["response_format"] = response_format
     if store is not None:
         kwargs["store"] = store
     if checkpointer is not None:
@@ -189,31 +180,14 @@ def _create_substitution_agent(model, response_format=None, store=None, checkpoi
     )
 
 
-@tool("substitution_expert", description="食材替换专家：为缺少的食材寻找替代方案，返回结构化 JSON (含原食材/替代品/影响说明)。适用于「没有XX可以用什么代替」「XX能换成什么」。")
+@tool("substitution_expert", description="食材替换专家：为缺少的食材寻找替代方案。适用于「没有XX可以用什么代替」「XX能换成什么」。")
 def call_substitution_expert(query: str) -> str:
-    """调用食材替换子 Agent。
-
-    Args:
-        query: 食材替换需求，如「没有黄油可以用什么代替」「做红烧肉缺料酒怎么办」
-    """
-    from api.models import AgentSubstitutionResponse
-
-    # ── 原代码: ──
-    # model = _get_model(temperature=0.0)
-    # subagent = _create_substitution_agent(model)
-    # result = subagent.invoke(...)
-    # return result["messages"][-1].content  # 自由文本
-    #
-    # ── 改进后 (Phase 8: Structured Output): ──
-    # response_format=AgentSubstitutionResponse
-    # temperature=0.0 确保高确定性 + 结构化保证格式一致
+    """调用食材替换子 Agent。"""
     global _substitution_subagent
     if _substitution_subagent is None:
-        from api.models import AgentSubstitutionResponse
         from api.dependencies import fridge_store, fridge_checkpointer
         _substitution_subagent = _create_substitution_agent(
-            _get_model(temperature=0.0, disable_thinking=True),
-            response_format=AgentSubstitutionResponse,
+            _get_model(temperature=0.0),
             store=fridge_store,
             checkpointer=fridge_checkpointer,
         )
@@ -275,8 +249,6 @@ def call_cooking_expert(query: str) -> str:
     Args:
         query: 烹饪知识问题，如「如何让鸡肉更嫩」「煎鱼不粘锅的技巧」
     """
-    # ── 原代码: 主 Agent 直接调用 search_cooking_knowledge ──
-    # ── 改进后: 子 Agent 可多轮检索 + 追问澄清 ──
     global _cooking_subagent
     if _cooking_subagent is None:
         from api.dependencies import fridge_store, fridge_checkpointer

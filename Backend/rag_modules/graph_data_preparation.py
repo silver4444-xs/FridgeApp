@@ -58,22 +58,42 @@ class GraphDataPreparationModule:
         """建立Neo4j连接"""
         try:
             self.driver = GraphDatabase.driver(
-                self.uri, 
+                self.uri,
                 auth=(self.user, self.password),
                 database=self.database
             )
             logger.info(f"已连接到Neo4j数据库: {self.uri}")
-            
+
             # 测试连接
             with self.driver.session() as session:
                 result = session.run("RETURN 1 as test")
                 test_result = result.single()
                 if test_result:
                     logger.info("Neo4j连接测试成功")
-                    
+
         except Exception as e:
             logger.error(f"连接Neo4j失败: {e}")
             raise
+
+    def ensure_fulltext_indexes(self):
+        """创建 Neo4j 全文索引 (如不存在则创建)，用于 _neo4j_entity_level_search 回退检索"""
+        if not self.driver:
+            return
+        indexes = [
+            ("recipe_fulltext_index", "Recipe", ["n.name", "n.description"]),
+            ("ingredient_fulltext_index", "Ingredient", ["n.name", "n.description"]),
+        ]
+        with self.driver.session() as session:
+            for idx_name, label, props in indexes:
+                try:
+                    props_str = ", ".join(props)
+                    session.run(
+                        f"CREATE FULLTEXT INDEX {idx_name} IF NOT EXISTS "
+                        f"FOR (n:{label}) ON EACH [{props_str}]"
+                    )
+                    logger.info(f"全文索引 {idx_name} 已就绪")
+                except Exception as e:
+                    logger.warning(f"创建全文索引 {idx_name} 失败 (可能已存在): {e}")
     
     def close(self):
         """关闭数据库连接"""
@@ -410,6 +430,46 @@ class GraphDataPreparationModule:
     
 
     
+    def build_cooking_knowledge_documents(self) -> List[Document]:
+        """
+        从 JSON 文件加载烹饪知识文档 (烹饪技巧、食材知识、食品安全等)。
+        这些内容补充菜谱文档中不包含的通用烹饪领域知识。
+        """
+        import json as json_mod
+        from pathlib import Path
+
+        data_path = Path(__file__).resolve().parents[1] / "data" / "cooking_knowledge.json"
+        if not data_path.exists():
+            logger.warning(f"烹饪知识文件不存在: {data_path}")
+            return []
+
+        with open(data_path, encoding="utf-8") as f:
+            entries = json_mod.load(f)
+
+        docs = []
+        for entry in entries:
+            keywords = entry.get("keywords", [])
+            keywords_str = "、".join(keywords) if keywords else ""
+            content = f"# {entry['title']}\n\n{entry['content']}"
+            if keywords_str:
+                content = f"关键词: {keywords_str}\n\n{content}"
+            doc = Document(
+                page_content=content,
+                metadata={
+                    "doc_type": "cooking_knowledge",
+                    "category": entry.get("category", ""),
+                    "title": entry.get("title", ""),
+                    "keywords": entry.get("keywords", []),
+                    "node_id": f"ck_{hash(entry['title']) & 0x7FFFFFFF}",
+                    "recipe_name": entry.get("title", ""),
+                    "node_type": "CookingKnowledge",
+                }
+            )
+            docs.append(doc)
+
+        logger.info(f"加载了 {len(docs)} 条烹饪知识文档")
+        return docs
+
     def get_statistics(self) -> Dict[str, Any]:
         """
         获取数据统计信息

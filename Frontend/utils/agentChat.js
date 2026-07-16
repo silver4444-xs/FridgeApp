@@ -6,18 +6,14 @@
  * 改进后: WebSocket 流式对话，打字机效果 + 工具状态提示
  */
 import { store } from './store.js'
+import { getWsUrl } from '@/config/app.js'
 
 let wsTask = null
 let reconnectTimer = null
 const listeners = { token: [], toolStart: [], toolEnd: [], toolError: [], done: [], error: [] }
 
 function getChatWsUrl() {
-	try {
-		const url = uni.getStorageSync('backend_url') || 'http://localhost:8000'
-		return url.replace(/^http/, 'ws') + '/ws/chat'
-	} catch (_) {
-		return 'ws://localhost:8000/ws/chat'
-	}
+	return getWsUrl('/ws/chat')
 }
 
 export function onAgentChat(event, callback) {

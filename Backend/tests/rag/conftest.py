@@ -72,4 +72,37 @@ def init_rag_system():
 
     deps.rag_system = _rag
     print(f"[RAG Fixture] 完成, system_ready={_rag.system_ready}")
+
+    # 预缓存 RAG 查询结果，test_context_precision 和 test_comprehensive 共享
+    _cached_results = _run_all_queries()
+    _rag._cached_results = _cached_results
+    print(f"[RAG Fixture] 预缓存 {len(_cached_results)} 条查询结果")
     return _rag
+
+
+def _run_all_queries():
+    """并行执行所有 RAG 查询并缓存结果"""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from test_retrieval_ragas import load_eval_dataset, run_rag_query
+    ds = load_eval_dataset()
+    questions = ds["question"]
+    results = [None] * len(questions)
+
+    def _query(idx, q):
+        return idx, run_rag_query(q)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {pool.submit(_query, i, q): i for i, q in enumerate(questions)}
+        for future in as_completed(futures):
+            idx, result = future.result()
+            results[idx] = result
+
+    return results
+
+
+def get_cached_rag_results():
+    """获取缓存的 RAG 查询结果 (session 级)"""
+    import api.dependencies as deps
+    if deps.rag_system and hasattr(deps.rag_system, '_cached_results'):
+        return deps.rag_system._cached_results
+    return None

@@ -20,12 +20,12 @@ fridge_agent = None
 fridge_graph = None
 
 # ── Phase 3.5: Long-term Memory —— Store 全局单例 ──
-# InMemoryStore: 开发模式，生产环境替换为 PostgresStore
+# 默认使用 SQLiteStore (持久化到 checkpoints.db)，回退到 InMemoryStore
 # 在 server.py lifespan 中创建并注入 create_fridge_agent()
 fridge_store = None
 
 # ── Phase 4: HITL —— Checkpointer 全局单例 ──
-# HumanInTheLoopMiddleware 依赖 checkpointer 保存中断状态
+# 默认使用 AsyncSqliteSaver (langgraph-checkpoint-sqlite)，回退到 InMemorySaver
 # Agent 和 Graph 共享同一实例
 fridge_checkpointer = None
 
@@ -70,9 +70,9 @@ def get_fridge_graph():
 
 
 def get_fridge_store():
-    """获取 LangGraph InMemoryStore (Long-term Memory)
+    """获取 LangGraph Store (Long-term Memory)
 
-    跨会话持久化用户偏好:
+    SQLiteStore (持久化到 checkpoints.db)，跨会话保留用户偏好:
         store = get_fridge_store()
         prefs = store.get(("preferences",), "user_abc")
     """

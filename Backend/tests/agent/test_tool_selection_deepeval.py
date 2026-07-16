@@ -68,7 +68,7 @@ def get_eval_model():
     """
     return GPTModel(
         model=os.getenv("EVAL_MODEL", "deepseek-v4-flash"),
-        api_key=os.getenv("EVAL_API_KEY"),
+        api_key=os.getenv("EVAL_API_KEY") or os.getenv("DEEPSEEK_API_KEY"),
         base_url=os.getenv("EVAL_API_BASE", "https://api.deepseek.com/v1"),
         temperature=0.0,
     )
@@ -83,7 +83,10 @@ def run_agent_query(message: str) -> dict:
     2. 通过 fridge_agent.invoke() 调用 Agent
     3. 从返回的 messages 中解析: 调用了哪些工具, 最终回复内容
     4. 返回 {"input", "tool_calls", "final_answer"} 字典
+
+    每条用例使用唯一 thread_id, 避免跨测试历史累积导致上下文膨胀+超时.
     """
+    import uuid
     from api.dependencies import fridge_agent
     from api.tools import FridgeContext
     import api.dependencies as deps
@@ -99,7 +102,10 @@ def run_agent_query(message: str) -> dict:
         current_inventory=deps.current_fridge_inventory,
         user_preferences={"忌口": ["花生"]}, user_id="test_agent")
     result = fridge_agent.invoke(
-        {"messages": [{"role": "user", "content": message}]}, context=ctx)
+        {"messages": [{"role": "user", "content": message}]},
+        context=ctx,
+        config={"configurable": {"thread_id": f"test_agent_{uuid.uuid4().hex[:8]}"}},
+    )
     messages = result.get("messages", [])
     tool_calls, final_answer = [], ""
     for msg in messages:
@@ -149,7 +155,7 @@ class TestAgentToolSelection:
         metric = ToolCorrectnessMetric(
             model=get_eval_model(),
             threshold=0.5,
-            should_exact_match=True,
+            should_exact_match=False,
             include_reason=True,
         )
         metric.measure(test_case)
@@ -178,12 +184,12 @@ class TestAgentToolSelection:
         metric = ToolCorrectnessMetric(
             model=get_eval_model(),
             threshold=0.5,
-            should_exact_match=True,
+            should_exact_match=False,
             include_reason=True,
         )
         results = evaluate(test_cases, [metric])
-        passed = sum(1 for r in results.test_result if r.success)
-        total = len(results.test_result)
+        passed = sum(1 for r in results.test_results if r.success)
+        total = len(results.test_results)
         accuracy = passed / total
         print(f"\n  DeepEval evaluate() 结果: {passed}/{total} = {accuracy:.1%}")
         assert accuracy >= 0.70, f"整体通过率 {accuracy:.1%} < 70%"

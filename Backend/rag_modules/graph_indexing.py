@@ -277,15 +277,15 @@ class GraphIndexingModule:
 
         # ChatPromptTemplate + with_structured_output 调用
         try:
-            prompt = ENHANCE_RELATION_KEYS.format(
+            messages = ENHANCE_RELATION_KEYS.format_prompt(
                 source_name=source_entity.entity_name,
                 source_type=source_entity.entity_type,
                 target_name=target_entity.entity_name,
                 target_type=target_entity.entity_type,
                 relation_type=relation_type,
             )
-            structured_llm = self.llm_client.with_structured_output(RelationKeysResult, method="json_mode")
-            result = structured_llm.invoke("Output JSON.\n" + prompt)
+            structured_llm = self.llm_client.with_structured_output(RelationKeysResult, method="function_calling")
+            result = structured_llm.invoke(messages)
             return result.keywords
         except Exception as e:
             logger.error(f"LLM增强关系索引键失败: {e}")
@@ -359,15 +359,75 @@ class GraphIndexingModule:
             for key in relation_kv.index_keys:
                 self.key_to_relations[key].append(relation_id)
     
+    def _expand_synonyms(self, key: str) -> List[str]:
+        """展开同义词: 利用 INGREDIENT_SYNONYMS 获取同义表达"""
+        try:
+            from matching.fuzzy_matcher import INGREDIENT_SYNONYMS
+        except ImportError:
+            return []
+        expanded = []
+        if key in INGREDIENT_SYNONYMS:
+            expanded.extend(INGREDIENT_SYNONYMS[key])
+        for k, synonyms in INGREDIENT_SYNONYMS.items():
+            if key in synonyms:
+                expanded.append(k)
+                expanded.extend([s for s in synonyms if s != key])
+                break
+        return expanded
+
     def get_entities_by_key(self, key: str) -> List[EntityKeyValue]:
-        """根据索引键获取实体"""
+        """根据索引键获取实体 (精确→同义词→子串→模糊 渐进匹配)"""
+        # 1. 精确匹配
         entity_ids = self.key_to_entities.get(key, [])
-        return [self.entity_kv_store[eid] for eid in entity_ids if eid in self.entity_kv_store]
-    
+        if entity_ids:
+            return [self.entity_kv_store[eid] for eid in entity_ids if eid in self.entity_kv_store]
+
+        # 2. 同义词扩展匹配
+        for ek in self._expand_synonyms(key):
+            entity_ids = self.key_to_entities.get(ek, [])
+            if entity_ids:
+                return [self.entity_kv_store[eid] for eid in entity_ids if eid in self.entity_kv_store]
+
+        # 3. 子字符串匹配
+        for entity_name, eids in self.key_to_entities.items():
+            if key in entity_name or entity_name in key:
+                return [self.entity_kv_store[eid] for eid in eids if eid in self.entity_kv_store]
+
+        # 4. 模糊匹配
+        import difflib
+        all_keys = list(self.key_to_entities.keys())
+        close = difflib.get_close_matches(key, all_keys, n=3, cutoff=0.6)
+        entity_ids = []
+        for match in close:
+            entity_ids.extend(self.key_to_entities.get(match, []))
+        if entity_ids:
+            return [self.entity_kv_store[eid] for eid in entity_ids if eid in self.entity_kv_store]
+
+        return []
+
     def get_relations_by_key(self, key: str) -> List[RelationKeyValue]:
-        """根据索引键获取关系"""
+        """根据索引键获取关系 (精确→子串→模糊 渐进匹配)"""
+        # 1. 精确匹配
         relation_ids = self.key_to_relations.get(key, [])
-        return [self.relation_kv_store[rid] for rid in relation_ids if rid in self.relation_kv_store]
+        if relation_ids:
+            return [self.relation_kv_store[rid] for rid in relation_ids if rid in self.relation_kv_store]
+
+        # 2. 子字符串匹配
+        for rel_key, rids in self.key_to_relations.items():
+            if key in rel_key or rel_key in key:
+                return [self.relation_kv_store[rid] for rid in rids if rid in self.relation_kv_store]
+
+        # 3. 模糊匹配
+        import difflib
+        all_keys = list(self.key_to_relations.keys())
+        close = difflib.get_close_matches(key, all_keys, n=3, cutoff=0.6)
+        relation_ids = []
+        for match in close:
+            relation_ids.extend(self.key_to_relations.get(match, []))
+        if relation_ids:
+            return [self.relation_kv_store[rid] for rid in relation_ids if rid in self.relation_kv_store]
+
+        return []
     
 
     

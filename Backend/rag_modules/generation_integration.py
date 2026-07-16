@@ -35,10 +35,11 @@ class GenerationIntegrationModule:
         self.lc_client = ChatOpenAI(
             model=self.model_name,
             api_key=api_key,
-            base_url="https://api.deepseek.com/v1",
+            base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
             temperature=self.temperature,
             max_tokens=self.max_tokens,
             stream_chunk_timeout=120,
+            model_kwargs={"extra_body": {"thinking": {"type": "disabled"}}},
         )
 
         logger.info(f"生成模块初始化完成，模型: {model_name}")
@@ -73,8 +74,8 @@ class GenerationIntegrationModule:
 
         # ChatPromptTemplate 调用
         try:
-            prompt = GENERATE_ADAPTIVE_ANSWER.format(context=context, question=question)
-            response = self.lc_client.invoke(prompt)
+            messages = GENERATE_ADAPTIVE_ANSWER.format_prompt(context=context, question=question)
+            response = self.lc_client.invoke(messages)
             return response.content.strip()
         except Exception as e:
             logger.error(f"LightRAG答案生成失败: {e}")
@@ -99,7 +100,7 @@ class GenerationIntegrationModule:
         context = "\n\n".join(context_parts)
 
         # ChatPromptTemplate 调用
-        prompt = GENERATE_ADAPTIVE_ANSWER.format(context=context, question=question)
+        messages = GENERATE_ADAPTIVE_ANSWER.format_prompt(context=context, question=question)
 
         # ChatOpenAI 流式调用
         for attempt in range(max_retries):
@@ -109,7 +110,7 @@ class GenerationIntegrationModule:
                 else:
                     print(f"第{attempt + 1}次尝试流式生成...\n")
 
-                for chunk in self.lc_client.stream(prompt):
+                for chunk in self.lc_client.stream(messages):
                     yield chunk.content
 
                 return

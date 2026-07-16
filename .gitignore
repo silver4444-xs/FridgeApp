@@ -1,5 +1,11 @@
 # 敏感凭证
 .env
+.env.test
+
+# 数据库文件 (持久化 Checkpointer/Store)
+*.db
+*.db-shm
+*.db-wal
 
 # 死信 + 临时文件
 dead_letter/
@@ -16,8 +22,25 @@ venv/
 node_modules/
 dist/
 
+# uni-app 构建产物 (含嵌入凭证，禁止提交)
+unpackage/
+
 # IDE
 .idea/
 *.swp
 *.swo
 CLAUDE.md
+
+# Hugging Face 模型缓存
+.hf_cache/
+Backend/.hf_cache/
+
+# 评测/测试缓存
+Backend/.deepeval/
+Backend/.coverage
+
+# 部署脚本 (含凭证模板)
+deploy/
+
+# 日志
+*.log

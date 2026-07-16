@@ -148,9 +148,9 @@ class GraphRAGRetrieval:
 
         # ChatPromptTemplate + with_structured_output 调用
         try:
-            prompt = UNDERSTAND_GRAPH_QUERY.format(query=query)
-            structured_llm = self.llm_client.with_structured_output(GraphQuery, method="json_mode")
-            return structured_llm.invoke("Output JSON.\n" + prompt)
+            messages = UNDERSTAND_GRAPH_QUERY.format_prompt(query=query)
+            structured_llm = self.llm_client.with_structured_output(GraphQuery, method="function_calling")
+            return structured_llm.invoke(messages)
         except Exception as e:
             logger.error(f"查询意图理解失败: {e}")
             # 降级方案：默认子图查询
@@ -437,14 +437,14 @@ class GraphRAGRetrieval:
                     "id": node.get("nodeId", ""),
                     "name": node.get("name", ""),
                     "labels": list(node.labels),
-                    "properties": dict(node)
+                    "properties": dict(node.items())
                 })
             
             relationships = []
             for rel in record["rels"]:
                 relationships.append({
-                    "type": type(rel).__name__,
-                    "properties": dict(rel)
+                    "type": rel.type,
+                    "properties": dict(rel.items())
                 })
             
             return GraphPath(
@@ -462,9 +462,19 @@ class GraphRAGRetrieval:
     def _build_knowledge_subgraph(self, record) -> KnowledgeSubgraph:
         """构建知识子图对象"""
         try:
-            central_nodes = [dict(record["source"])]
-            connected_nodes = [dict(node) for node in record["nodes"]]
-            relationships = [dict(rel) for rel in record["rels"]]
+            central_nodes = [dict(record["source"].items())]
+            connected_nodes = [dict(node.items()) for node in record["nodes"]]
+            relationships = []
+            for rel_group in record["rels"]:
+                if isinstance(rel_group, list):
+                    for rel in rel_group:
+                        props = dict(rel.items())
+                        props.setdefault("type", rel.type)
+                        relationships.append(props)
+                else:
+                    props = dict(rel_group.items())
+                    props.setdefault("type", rel_group.type)
+                    relationships.append(props)
             
             return KnowledgeSubgraph(
                 central_nodes=central_nodes,
@@ -531,26 +541,46 @@ class GraphRAGRetrieval:
         return documents
     
     def _build_path_description(self, path: GraphPath) -> str:
-        """构建路径的自然语言描述"""
+        """构建路径的自然语言描述，包含节点类型和关系类型"""
         if not path.nodes:
             return "空路径"
-            
+
         desc_parts = []
         for i, node in enumerate(path.nodes):
-            desc_parts.append(node.get("name", f"节点{i}"))
+            name = node.get("name", f"节点{i}")
+            labels = node.get("labels", [])
+            label_str = "/".join(labels) if labels else "实体"
+            desc_parts.append(f"{name}({label_str})")
             if i < len(path.relationships):
-                rel_type = path.relationships[i].get("type", "相关")
-                desc_parts.append(f" --{rel_type}--> ")
-        
+                rel = path.relationships[i]
+                rel_type = rel.get("type", "相关")
+                desc_parts.append(f" --[{rel_type}]--> ")
+
         return "".join(desc_parts)
-    
+
     def _build_subgraph_description(self, subgraph: KnowledgeSubgraph) -> str:
-        """构建子图的自然语言描述"""
-        central_names = [node.get("name", "未知") for node in subgraph.central_nodes]
-        node_count = len(subgraph.connected_nodes)
-        rel_count = len(subgraph.relationships)
-        
-        return f"关于 {', '.join(central_names)} 的知识网络，包含 {node_count} 个相关概念和 {rel_count} 个关系。"
+        """构建子图的自然语言描述，包含实际节点和关系名称"""
+        parts = []
+
+        if subgraph.central_nodes:
+            central_names = [n.get("name", "未知") for n in subgraph.central_nodes if n.get("name")]
+            parts.append(f"核心概念: {', '.join(central_names)}")
+
+        if subgraph.connected_nodes:
+            node_names = [n.get("name", "") for n in subgraph.connected_nodes[:10] if n.get("name")]
+            if node_names:
+                parts.append(f"相关节点({len(subgraph.connected_nodes)}): {', '.join(node_names)}")
+
+        if subgraph.relationships:
+            rel_types = set(r.get("type", "相关") for r in subgraph.relationships if r.get("type"))
+            parts.append(f"关系类型: {', '.join(list(rel_types)[:5])}")
+
+        metrics = subgraph.graph_metrics
+        if metrics:
+            density = metrics.get("density", 0)
+            parts.append(f"图密度: {density:.3f}")
+
+        return " | ".join(parts) if parts else "空知识子图"
     
     def _rank_by_graph_relevance(self, documents: List[Document], query: str) -> List[Document]:
         """基于图结构相关性排序"""
@@ -577,12 +607,69 @@ class GraphRAGRetrieval:
         return chains[:3]
     
     def _find_entity_relations(self, graph_query: GraphQuery, session) -> List[GraphPath]:
-        """查找实体间关系"""
-        return []
-    
+        """查找实体间关系: 在 Neo4j 中查询源实体和目标实体之间的直接关系"""
+        paths = []
+        sources = graph_query.source_entities
+        targets = graph_query.target_entities or []
+        max_depth = min(graph_query.max_depth, 3)
+
+        try:
+            cypher = """
+            UNWIND $sources as src_name
+            MATCH (a)
+            WHERE a.name CONTAINS src_name OR a.nodeId = src_name
+            UNWIND $targets as tgt_name
+            MATCH (b)
+            WHERE (b.name CONTAINS tgt_name OR b.nodeId = tgt_name) AND a <> b
+            MATCH path = (a)-[*1..""" + str(max_depth) + """]-(b)
+            WITH path, length(path) as plen,
+                 relationships(path) as rels, nodes(path) as pnodes
+            ORDER BY plen
+            LIMIT 10
+            RETURN pnodes as path_nodes, rels, plen as path_len,
+                   1.0 / plen as relevance
+            """
+            result = session.run(cypher, {"sources": sources, "targets": targets})
+            for record in result:
+                path_data = self._parse_neo4j_path(record)
+                if path_data:
+                    paths.append(path_data)
+        except Exception as e:
+            logger.error(f"实体关系查询失败: {e}")
+
+        return paths
+
     def _find_shortest_paths(self, graph_query: GraphQuery, session) -> List[GraphPath]:
-        """查找最短路径"""
-        return []
+        """查找最短路径: 使用 shortestPath 算法在图中找最短连接"""
+        paths = []
+        sources = graph_query.source_entities
+        targets = graph_query.target_entities or sources  # 若无目标则找源实体间路径
+
+        try:
+            cypher = """
+            UNWIND $sources as src_name
+            MATCH (a)
+            WHERE a.name CONTAINS src_name OR a.nodeId = src_name
+            UNWIND $targets as tgt_name
+            MATCH (b)
+            WHERE (b.name CONTAINS tgt_name OR b.nodeId = tgt_name) AND a <> b
+            MATCH path = shortestPath((a)-[*1..5]-(b))
+            WITH path, length(path) as plen,
+                 relationships(path) as rels, nodes(path) as pnodes
+            ORDER BY plen
+            LIMIT 10
+            RETURN pnodes as path_nodes, rels, plen as path_len,
+                   1.0 / plen as relevance
+            """
+            result = session.run(cypher, {"sources": sources, "targets": targets})
+            for record in result:
+                path_data = self._parse_neo4j_path(record)
+                if path_data:
+                    paths.append(path_data)
+        except Exception as e:
+            logger.error(f"最短路径查询失败: {e}")
+
+        return paths
     
     def _fallback_subgraph_extraction(self, graph_query: GraphQuery) -> KnowledgeSubgraph:
         """降级子图提取"""

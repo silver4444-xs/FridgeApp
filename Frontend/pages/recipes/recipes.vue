@@ -316,13 +316,10 @@ import RecipeDetailModal from '@/components/recipes/RecipeDetailModal.vue'
 import AgentChatBox from '@/components/recipes/AgentChatBox.vue'
 
 import { getRecipeImage, FALLBACK_RECIPE } from '@/utils/imageResolver.js'
+import { getApiUrl } from '@/config/app.js'
 
 function getApiBase() {
-	try {
-		const stored = uni.getStorageSync('backend_url')
-		if (stored) return stored.replace(/\/+$/, '') + '/api'
-	} catch (e) { /* ignore */ }
-	return 'http://localhost:8000/api'
+	return getApiUrl('')
 }
 const FALLBACK_IMG = FALLBACK_RECIPE
 

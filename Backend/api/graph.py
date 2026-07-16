@@ -67,11 +67,16 @@ def _make_recommend_node(fridge_agent):
         """
         from api.tools import FridgeContext
 
+        inventory = state.get("current_inventory", [])
+        if not inventory:
+            import api.dependencies as deps
+            inventory = deps.current_fridge_inventory
+
         user_id = config.get("configurable", {}).get("thread_id", "default")
         result = await fridge_agent.ainvoke(
             {"messages": state["messages"]},
             context=FridgeContext(
-                current_inventory=state.get("current_inventory", []),
+                current_inventory=inventory,
                 user_id=user_id,
             ),
         )
@@ -107,13 +112,13 @@ def create_fridge_graph(
         graph = create_fridge_graph(agent)
 
         # 第一轮
-        result = graph.invoke(
+        result = await graph.ainvoke(
             {"messages": [{"role": "user", "content": "能做什么菜?"}]},
             config={"configurable": {"thread_id": "user_abc"}},
         )
 
         # 第二轮 (自动继承上文)
-        result = graph.invoke(
+        result = await graph.ainvoke(
             {"messages": [{"role": "user", "content": "第一个菜的具体步骤?"}]},
             config={"configurable": {"thread_id": "user_abc"}},
         )

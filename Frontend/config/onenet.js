@@ -1,16 +1,26 @@
 /**
  * OneNET Studio 统一配置文件
+ *
+ * 安全警告: 所有凭证字段在源码中均为空白占位符。
+ * 真实凭证必须在部署时从环境变量或后端 API 注入，禁止硬编码到源码中。
  */
 
 const ONENET_CONFIG = {
 	// ---- 设备凭证 ----
-	productId: 'OAgTJW6fph',
+	/**
+	 * 安全警告: 以下凭证为占位符，禁止提交真实值到版本控制。
+	 * 部署时通过以下方式之一注入:
+	 *   1. 构建时替换 — CI/CD 环境变量在构建阶段替换
+	 *   2. 运行时注入 — 从后端 API 端点获取 (推荐)
+	 *   3. HBuilderX manifest — 通过 manifest.json 配置注入
+	 */
+	productId: '', // 部署时注入
 	deviceName: 'device_01',
-	deviceSecret: 'bFY1YWlrdmJ4eDB4c3o2c2U1MnpuSUNKUG03dVZuZno=',
+	deviceSecret: '', // 部署时注入
 
-	// ---- API 认证 ----
-	accessKey: 'oR2pXSsfacONMQGjZ3+TtWN79S+npUepxSklYeHBK5s=',
-	userId: '514400',
+	// ---- API 认证 (部署时注入) ----
+	accessKey: '', // 部署时注入
+	userId: '', // 部署时注入
 
 	// ---- 连接地址 ----
 	baseUrl: 'https://iot-api.heclouds.com',
