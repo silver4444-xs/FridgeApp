@@ -25,14 +25,12 @@
   <td align="center" width="25%"><b>🔍 智能搜索</b></td>
 </tr>
 <tr>
-  <td><img src="docs/images/screenshot-inventory.svg" alt="冰箱库存截图" width="100%"/></td>
-  <td><img src="docs/images/screenshot-chat.svg" alt="AI 对话截图" width="100%"/></td>
-  <td><img src="docs/images/screenshot-recipe.svg" alt="菜谱详情截图" width="100%"/></td>
-  <td><img src="docs/images/screenshot-search.svg" alt="智能搜索截图" width="100%"/></td>
+  <td><img src="docs/images/冰箱库存.png" alt="冰箱库存" width="100%"/></td>
+  <td><img src="docs/images/AI对话.png" alt="AI 对话" width="100%"/></td>
+  <td><img src="docs/images/菜谱详情.png" alt="菜谱详情" width="100%"/></td>
+  <td><img src="docs/images/智能搜索.png" alt="智能搜索" width="100%"/></td>
 </tr>
 </table>
-
-> 💡 用实际截图（1280×720 PNG）替换 `docs/images/` 下的 SVG 占位图即可。
 
 ---
 
