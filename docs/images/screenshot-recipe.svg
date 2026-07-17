@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#1a1a2e"/>
+  <rect x="40" y="40" width="1200" height="60" rx="12" fill="#16213e"/>
+  <text x="640" y="78" text-anchor="middle" fill="#e0e0e0" font-size="24" font-family="Arial,sans-serif">📋 Recipe Detail — 菜谱详情页</text>
+  <rect x="40" y="120" width="580" height="560" rx="12" fill="#0f3460"/>
+  <text x="330" y="400" text-anchor="middle" fill="#7f8c8d" font-size="20" font-family="Arial,sans-serif">📸 截图占位</text>
+  <text x="330" y="430" text-anchor="middle" fill="#7f8c8d" font-size="16" font-family="Arial,sans-serif">请替换为实际截图</text>
+  <rect x="640" y="120" width="600" height="560" rx="12" fill="#16213e"/>
+  <text x="940" y="400" text-anchor="middle" fill="#7f8c8d" font-size="20" font-family="Arial,sans-serif">📸 截图占位</text>
+  <text x="940" y="430" text-anchor="middle" fill="#7f8c8d" font-size="16" font-family="Arial,sans-serif">请替换为实际截图</text>
+</svg>

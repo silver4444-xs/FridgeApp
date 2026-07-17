@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#1a1a2e"/>
+  <rect x="40" y="40" width="1200" height="60" rx="12" fill="#16213e"/>
+  <text x="640" y="78" text-anchor="middle" fill="#e0e0e0" font-size="24" font-family="Arial,sans-serif">🔍 Smart Search — 智能搜索</text>
+  <rect x="40" y="120" width="1200" height="180" rx="12" fill="#0f3460"/>
+  <text x="640" y="220" text-anchor="middle" fill="#7f8c8d" font-size="20" font-family="Arial,sans-serif">📸 截图占位 — 搜索栏及搜索建议</text>
+  <rect x="40" y="320" width="1200" height="360" rx="12" fill="#16213e"/>
+  <text x="640" y="510" text-anchor="middle" fill="#7f8c8d" font-size="20" font-family="Arial,sans-serif">📸 截图占位 — 搜索结果展示</text>
+</svg>

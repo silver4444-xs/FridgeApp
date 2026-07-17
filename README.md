@@ -1,11 +1,12 @@
 <div align="center">
 
-# 🧊 FridgeAI — AI-Powered Smart Fridge & Recipe Recommendation System
+# 🧊 FridgeAI — 你的 AI 智能厨房助手
 
-**An intelligent kitchen assistant powered by LangGraph Agents, GraphRAG (Neo4j), and Vector Search (Milvus).**
+**"冰箱里有什么？帮我推荐几道菜" — 一句话，AI 全搞定**
+
+*An open-source AI recipe recommendation & smart fridge system powered by LangGraph Agents, GraphRAG (Neo4j), and Vector Search (Milvus).*
 
 [![GitHub Stars](https://img.shields.io/github/stars/silver4444-xs/FridgeApp?style=for-the-badge&color=fbbf24)](https://github.com/silver4444-xs/FridgeApp/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/silver4444-xs/FridgeApp?style=for-the-badge&color=0891b2)](https://github.com/silver4444-xs/FridgeApp/network/members)
 [![License](https://img.shields.io/github/license/silver4444-xs/FridgeApp?style=for-the-badge&color=22c55e)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
@@ -16,29 +17,38 @@
 
 ---
 
+## 📸 Demo / 功能演示
+
+<table>
+<tr>
+  <td align="center" width="25%"><b>🧊 冰箱库存</b><br><i>Fridge Inventory</i></td>
+  <td align="center" width="25%"><b>💬 AI 对话</b><br><i>AI Chat</i></td>
+  <td align="center" width="25%"><b>📋 菜谱详情</b><br><i>Recipe Detail</i></td>
+  <td align="center" width="25%"><b>🔍 智能搜索</b><br><i>Smart Search</i></td>
+</tr>
+<tr>
+  <td><img src="docs/images/screenshot-inventory.svg" alt="Fridge Inventory screenshot" width="100%"/></td>
+  <td><img src="docs/images/screenshot-chat.svg" alt="AI Chat screenshot" width="100%"/></td>
+  <td><img src="docs/images/screenshot-recipe.svg" alt="Recipe Detail screenshot" width="100%"/></td>
+  <td><img src="docs/images/screenshot-search.svg" alt="Smart Search screenshot" width="100%"/></td>
+</tr>
+</table>
+
+> 💡 **替换截图**: 用 1280×720 PNG 格式的实际截图替换 `docs/images/` 下的 SVG 占位图即可。
+
+---
+
 ## 📖 Overview / 项目概述
 
-**EN:** FridgeAI is a full-stack AI application that turns a smart fridge into an intelligent kitchen assistant. It connects to IoT sensors via OneNET MQTT to track ingredients in real-time, then uses LangGraph-powered AI agents with GraphRAG (Neo4j knowledge graph + Milvus vector database) to recommend recipes, suggest ingredient substitutions, and answer cooking questions — all through a natural conversational interface.
+**EN:** FridgeAI is an open-source, full-stack AI application that turns a smart fridge into an intelligent kitchen assistant. Perfect for **Chinese cooking** enthusiasts and anyone who wants AI-powered **recipe recommendation** — it connects to IoT sensors via OneNET MQTT to track ingredients in real-time, then uses **LangGraph Agents** with **GraphRAG** (Neo4j knowledge graph + Milvus vector database) to recommend recipes, suggest ingredient substitutions, and answer cooking questions through a natural conversational interface.
 
-**CN:** FridgeAI 是一个全栈 AI 应用，将智能冰箱变成厨房助手。通过 OneNET MQTT 连接 IoT 传感器实时追踪食材，使用 LangGraph 驱动的 AI Agent 结合 GraphRAG (Neo4j 知识图谱 + Milvus 向量数据库) 进行菜谱推荐、食材替换建议和烹饪问答——全部通过自然语言对话界面完成。
+**CN:** FridgeAI 是一个开源全栈 AI 应用，将智能冰箱变成厨房助手。通过 OneNET MQTT 连接 IoT 传感器实时追踪食材，使用 LangGraph 驱动的 AI Agent 结合 GraphRAG (Neo4j 知识图谱 + Milvus 向量数据库) 进行菜谱推荐、食材替换建议和烹饪问答——全部通过自然语言对话界面完成。
 
-> **323 recipes** · **12 categories** · **3 AI sub-agents** · **GraphRAG retrieval** · **Streaming chat** · **Mobile-first UI**
-
----
-
-## 🎬 Quick Demo / 快速演示
-
-> 📸 Screenshots coming soon. In the meantime, here's what you can do:
-
-| 🧊 **Fridge Inventory** | 💬 **AI Chat** | 📋 **Recipe Detail** | 🔍 **Smart Search** |
-|:---:|:---:|:---:|:---:|
-| Real-time IoT sync | Streaming Agent | Step-by-step guide | GraphRAG-powered |
-| Auto-polling from OneNET | Token-level typewriter | Ingredient tags + tips | BM25 + Vector hybrid |
-| Manual add/edit/delete | Tool call progress | Category badges + images | 80+ synonym groups |
+> **323 recipes** · **12 categories** · **3 AI sub-agents** · **8 tools** · **GraphRAG retrieval** · **Streaming chat** · **Mobile-first UI**
 
 ---
 
-## 🚀 Quick Start / 快速开始
+## 🚀 Quick Start / 快速开始 ⏱️ 5 分钟
 
 ### Prerequisites / 环境要求
 
@@ -54,17 +64,17 @@
 ### 3-Step Setup / 三步安装
 
 ```bash
-# 1. Clone & install dependencies
+# ① Clone & install
 git clone https://github.com/silver4444-xs/FridgeApp.git
 cd FridgeApp/Backend
 conda create -n cook-rag-1 python=3.12 -y && conda activate cook-rag-1
 pip install -r requirements.txt
 
-# 2. Set environment variables
+# ② Configure
 cp .env.example .env
 # Edit .env: add DEEPSEEK_API_KEY, NEO4J_URI/PASSWORD, MILVUS_HOST
 
-# 3. Start the server
+# ③ Run
 uvicorn api.server:app --host 0.0.0.0 --port 8000 --reload
 # Open http://localhost:8000/docs for Swagger API docs
 ```
