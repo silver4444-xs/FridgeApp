@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; padding: 40px;
+  }
+  .container { width: 1050px; }
+  .title {
+    text-align: center; color: #e2e8f0; font-size: 24px; font-weight: 700;
+    margin-bottom: 40px; letter-spacing: 0.05em;
+  }
+  .title span { color: #a78bfa; }
+
+  .step {
+    display: flex; align-items: center; gap: 0;
+    margin-bottom: 2px;
+  }
+  .step-num {
+    min-width: 48px; height: 48px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 800; color: #fff;
+    border-radius: 10px;
+  }
+  .step-card {
+    flex: 1; display: flex; align-items: center;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px; padding: 16px 20px; gap: 16px;
+  }
+  .step-icon {
+    width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+    font-size: 22px; border-radius: 10px; flex-shrink: 0;
+  }
+  .step-body { flex: 1; }
+  .step-title { color: #e2e8f0; font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+  .step-desc { color: #94a3b8; font-size: 12px; }
+  .step-agent {
+    font-size: 10px; color: #64748b; background: rgba(255,255,255,0.05);
+    padding: 4px 10px; border-radius: 6px; white-space: nowrap;
+  }
+
+  .connector {
+    display: flex; align-items: center; padding-left: 24px;
+    height: 22px;
+  }
+  .connector-line {
+    width: 2px; height: 100%;
+    background: linear-gradient(to bottom, rgba(139,92,246,0.5), rgba(139,92,246,0.1));
+  }
+
+  .s1 .step-num { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+  .s1 .step-icon { background: rgba(59,130,246,0.15); }
+  .s2 .step-num { background: linear-gradient(135deg, #10b981, #059669); }
+  .s2 .step-icon { background: rgba(16,185,129,0.15); }
+  .s3 .step-num { background: linear-gradient(135deg, #f59e0b, #d97706); }
+  .s3 .step-icon { background: rgba(245,158,11,0.15); }
+  .s4 .step-num { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+  .s4 .step-icon { background: rgba(139,92,246,0.15); }
+  .s5 .step-num { background: linear-gradient(135deg, #ec4899, #db2777); }
+  .s5 .step-icon { background: rgba(236,72,153,0.15); }
+  .s6 .step-num { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+  .s6 .step-icon { background: rgba(6,182,212,0.15); }
+  .s7 .step-num { background: linear-gradient(135deg, #84cc16, #65a30d); }
+  .s7 .step-icon { background: rgba(132,204,22,0.15); }
+
+  .parallel-badge {
+    display: inline-block; font-size: 10px; color: #fbbf24;
+    background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.2);
+    padding: 2px 8px; border-radius: 4px; margin-left: 8px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="title">FridgeAI <span>Agent 对话流程</span></div>
+
+  <div class="step s1">
+    <div class="step-num">1</div>
+    <div class="step-card">
+      <div class="step-icon">💬</div>
+      <div class="step-body">
+        <div class="step-title">用户发送消息</div>
+        <div class="step-desc">"冰箱里有什么？帮我推荐几道菜"</div>
+      </div>
+      <div class="step-agent">📱 移动端 → WebSocket</div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line"></div></div>
+
+  <div class="step s2">
+    <div class="step-num">2</div>
+    <div class="step-card">
+      <div class="step-icon">📡</div>
+      <div class="step-body">
+        <div class="step-title">获取冰箱库存</div>
+        <div class="step-desc">调用 get_fridge_inventory() → [鸡蛋×6, 西红柿×3, 牛奶×1, ...]</div>
+      </div>
+      <div class="step-agent">🔧 Tool: get_fridge_inventory</div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line"></div></div>
+
+  <div class="step s3">
+    <div class="step-num">3</div>
+    <div class="step-card">
+      <div class="step-icon">🎯</div>
+      <div class="step-body">
+        <div class="step-title">主 Agent 路由决策</div>
+        <div class="step-desc">分析意图 → 分发到 recipe_expert 子 Agent（菜谱推荐场景）</div>
+      </div>
+      <div class="step-agent">🧠 主 Agent → recipe_expert</div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line"></div></div>
+
+  <div class="step s4">
+    <div class="step-num">4</div>
+    <div class="step-card">
+      <div class="step-icon">🔍</div>
+      <div class="step-body">
+        <div class="step-title">GraphRAG 混合检索 <span class="parallel-badge">并行</span></div>
+        <div class="step-desc">智能路由 → Neo4j 知识图谱 + Milvus 向量检索 + BM25 关键词</div>
+      </div>
+      <div class="step-agent">🕸️ Neo4j · 🔢 Milvus · 📊 BM25</div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line"></div></div>
+
+  <div class="step s5">
+    <div class="step-num">5</div>
+    <div class="step-card">
+      <div class="step-icon">🧩</div>
+      <div class="step-body">
+        <div class="step-title">结果融合与排序</div>
+        <div class="step-desc">检索结果去重融合 → 结合用户偏好过滤 → Top-5 推荐生成</div>
+      </div>
+      <div class="step-agent">📋 偏好过滤 · 结构化输出</div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line"></div></div>
+
+  <div class="step s6">
+    <div class="step-num">6</div>
+    <div class="step-card">
+      <div class="step-icon">✍️</div>
+      <div class="step-body">
+        <div class="step-title">大模型生成回复</div>
+        <div class="step-desc">DeepSeek V4 结合检索上下文 + 用户偏好 → 生成个性化推荐文本</div>
+      </div>
+      <div class="step-agent">🤖 DeepSeek V4 Flash</div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line"></div></div>
+
+  <div class="step s7">
+    <div class="step-num">7</div>
+    <div class="step-card">
+      <div class="step-icon">⚡</div>
+      <div class="step-body">
+        <div class="step-title">流式推送回复</div>
+        <div class="step-desc">Token 级实时推送 → 前端打字机渲染，含菜谱图片和富文本格式</div>
+      </div>
+      <div class="step-agent">📡 stream_token · WebSocket</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

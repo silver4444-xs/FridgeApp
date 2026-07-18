@@ -81,78 +81,11 @@ uvicorn api.server:app --host 0.0.0.0 --port 8000 --reload
 
 ### 整体架构图
 
-```mermaid
-graph TB
-    subgraph "📱 前端 (uni-app)"
-        A[Vue 3 移动应用]
-        A1[冰箱库存管理]
-        A2[AI 对话]
-        A3[菜谱浏览]
-    end
-
-    subgraph "⚡ 后端 (FastAPI)"
-        B[WebSocket 服务]
-        C[REST API]
-        D[LangGraph Agent]
-    end
-
-    subgraph "🧠 AI Agent 栈"
-        E[主 Agent<br/>厨房助手]
-        F1[recipe_expert<br/>菜谱推荐]
-        F2[substitution_expert<br/>食材替换]
-        F3[cooking_expert<br/>烹饪问答]
-        G[5 层中间件]
-    end
-
-    subgraph "🔍 RAG 检索系统"
-        H[智能路由]
-        I[Neo4j<br/>知识图谱]
-        J[Milvus<br/>向量数据库]
-        K[混合检索<br/>BM25 + 向量]
-    end
-
-    subgraph "🌐 IoT 层"
-        L[OneNET 云平台]
-        M[RK3588 边缘端<br/>MQTT 客户端]
-    end
-
-    A <-->|WebSocket| B
-    A -->|HTTP| C
-    C --> D
-    D --> E
-    E --> F1 & F2 & F3
-    E --> G
-    F1 & F3 --> H
-    H --> I & J & K
-    B --> L
-    L <-->|MQTT| M
-    M -->|"传感器数据"| N[智能冰箱]
-```
+![FridgeAI 系统架构](docs/images/architecture.png)
 
 ### Agent 对话流程
 
-```mermaid
-sequenceDiagram
-    participant U as 用户
-    participant W as WebSocket
-    participant A as 主 Agent
-    participant R as recipe_expert
-    participant G as GraphRAG
-    participant D as 菜谱数据库
-
-    U->>W: "冰箱里有什么？帮我推荐几道菜"
-    W->>A: invoke(messages)
-    A->>A: get_fridge_inventory()
-    A-->>A: [鸡蛋×6, 西红柿×3, ...]
-    A->>R: recommend_by_fridge(偏好)
-    R->>G: ask_question_with_routing()
-    G->>D: 混合检索
-    D-->>G: top-10 结果
-    G-->>R: 检索上下文
-    R-->>A: 结构化推荐
-    A-->>W: stream_tokens
-    W-->>U: "🍳 推荐以下菜品..."
-```
+![FridgeAI Agent 对话流程](docs/images/agent_flow.png)
 
 ---
 
