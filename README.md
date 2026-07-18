@@ -217,6 +217,29 @@ sequenceDiagram
 | 🧭 **智能路由** | 自动选择检索策略：传统混合 / 图谱增强 / 联合检索 |
 | 🧪 **评测体系** | 50 条 Ragas 检索质量测试 + 12 条 DeepEval Agent 工具选择测试 |
 
+### 检索路由策略
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'system-ui, sans-serif', 'fontSize': '13px', 'lineColor': '#94a3b8'}}}%%
+flowchart TB
+    Q["🔍 用户查询"] --> R{"🧭 智能路由"}
+
+    R -->|"图谱增强"| N["🕸️ Neo4j 知识图谱<br/><small>实体-关系推理</small>"]:::graph
+    R -->|"语义向量"| M["🔢 Milvus 向量检索<br/><small>BGE 中文嵌入</small>"]:::vector
+    R -->|"关键词"| B["📊 BM25 关键词<br/><small>倒排索引匹配</small>"]:::keyword
+
+    N --> F["🔗 结果融合<br/><small>去重 · 重排序</small>"]:::fusion
+    M --> F
+    B --> F
+
+    F --> O["✅ Top-K 检索结果"]
+
+    classDef graph fill:#f0fdf4,stroke:#10b981,stroke-width:2px,color:#065f46
+    classDef vector fill:#eff6ff,stroke:#3b82f6,stroke-width:2px,color:#1e40af
+    classDef keyword fill:#fffbeb,stroke:#f59e0b,stroke-width:2px,color:#92400e
+    classDef fusion fill:#f5f3ff,stroke:#8b5cf6,stroke-width:2px,color:#5b21b6
+```
+
 ---
 
 ## 🤔 与普通菜谱 App 的区别
@@ -276,12 +299,47 @@ sequenceDiagram
 
 ## 🛡️ 中间件栈
 
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'system-ui, sans-serif', 'fontSize': '13px', 'lineColor': '#94a3b8'}}}%%
+flowchart LR
+    A["📥 用户请求"] --> M1["① 频率限制<br/><small>单轮最多15次调用</small>"]
+    M1 --> M2["② 摘要压缩<br/><small>超4000 tokens 自动压缩</small>"]
+    M2 --> M3["③ 人工审批<br/><small>写入操作需用户确认</small>"]
+    M3 --> M4["④ 模型重试<br/><small>API容错 3次指数退避</small>"]
+    M4 --> M5["⑤ 工具重试<br/><small>调用容错 2次重试</small>"]
+    M5 --> B["🤖 Agent 执行"]
+
+    classDef base fill:#f8fafc,stroke:#94a3b8,stroke-width:1.5px,color:#334155
+    classDef crit fill:#fef2f2,stroke:#ef4444,stroke-width:2px,color:#991b1b
+    class A,B base
+    class M1,M2,M4,M5 base
+    class M3 crit
 ```
-1. ModelCallLimitMiddleware   单轮最多 15 次模型调用
-2. SummarizationMiddleware    超过 4000 tokens 自动摘要压缩
-3. HumanInTheLoopMiddleware   写入操作需用户确认
-4. ModelRetryMiddleware       大模型 API 容错（3 次重试，指数退避）
-5. ToolRetryMiddleware        工具调用容错（2 次重试）
+
+### Agent-工具关系
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'system-ui, sans-serif', 'fontSize': '13px', 'lineColor': '#94a3b8'}}}%%
+graph TB
+    MAIN["🧠 主 Agent<br/>厨房助手"]:::main
+
+    MAIN --> T1["获取冰箱库存"]:::context
+    MAIN --> T2["保存 / 读取偏好"]:::context
+
+    MAIN --> RE["菜谱推荐专家"]:::sub
+    MAIN --> SE["食材替换专家"]:::sub
+    MAIN --> CE["烹饪知识专家"]:::sub
+
+    RE --> T3["按库存推荐"]:::tool
+    RE --> T4["搜索菜谱"]:::tool
+    RE --> T5["菜谱详情"]:::tool
+    SE --> T6["食材替换建议"]:::tool
+    CE --> T7["烹饪知识检索"]:::tool
+
+    classDef main fill:#f5f3ff,stroke:#8b5cf6,stroke-width:2px,color:#5b21b6
+    classDef sub fill:#faf5ff,stroke:#a78bfa,stroke-width:2px,color:#6d28d9
+    classDef context fill:#eff6ff,stroke:#3b82f6,stroke-width:1.5px,color:#1e40af
+    classDef tool fill:#f8fafc,stroke:#94a3b8,stroke-width:1.5px,color:#334155
 ```
 
 ---
