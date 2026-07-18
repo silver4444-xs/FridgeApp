@@ -145,11 +145,11 @@ graph TB
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {
-  'actorBkg': '#f5f3ff', 'actorBorder': '#8b5cf6', 'actorTextColor': '#5b21b6',
-  'actorLineColor': '#c4b5fd', 'signalColor': '#475569', 'signalTextColor': '#1e293b',
+  'actorBkg': '#f8fafc', 'actorBorder': '#475569', 'actorTextColor': '#1e293b',
+  'actorLineColor': '#cbd5e1', 'signalColor': '#475569', 'signalTextColor': '#1e293b',
   'labelBoxBkgColor': '#f8fafc', 'labelBoxBorderColor': '#e2e8f0',
   'noteBkgColor': '#fffbeb', 'noteBorderColor': '#f59e0b',
-  'activationBkgColor': '#ede9fe', 'activationBorderColor': '#a78bfa',
+  'activationBkgColor': '#f1f5f9', 'activationBorderColor': '#94a3b8',
   'fontFamily': 'system-ui, sans-serif', 'fontSize': '13px'
 }}}%%
 sequenceDiagram
@@ -172,7 +172,7 @@ sequenceDiagram
     activate RG
     RG->>DB: 混合检索 (图谱+向量+BM25)
     activate DB
-    DB-->>RG: Top-10 匹配结果
+    DB-->>RG: 前十条匹配结果
     deactivate DB
     RG-->>RE: 检索上下文
     deactivate RG
