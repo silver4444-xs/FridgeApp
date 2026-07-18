@@ -83,13 +83,10 @@ uvicorn api.server:app --host 0.0.0.0 --port 8000 --reload
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {
-  'primaryColor': '#e0e7ff', 'primaryTextColor': '#1e293b', 'primaryBorderColor': '#6366f1',
-  'secondaryColor': '#dcfce7', 'secondaryTextColor': '#1e293b', 'secondaryBorderColor': '#22c55e',
-  'tertiaryColor': '#fef3c7', 'tertiaryTextColor': '#1e293b', 'tertiaryBorderColor': '#f59e0b',
   'lineColor': '#94a3b8', 'fontFamily': 'system-ui, sans-serif', 'fontSize': '13px'
 }}}%%
 graph TB
-    subgraph FG["Frontend 展示层"]
+    subgraph FG["📱 前端展示层"]
         direction LR
         A1["冰箱库存"]:::frontend
         A2["AI 对话"]:::frontend
@@ -97,91 +94,91 @@ graph TB
         A4["智能搜索"]:::frontend
     end
 
-    subgraph BE["API 网关层"]
+    subgraph BE["⚡ API 网关层"]
         direction LR
-        B1["REST API"]:::backend
+        B1["REST 接口"]:::backend
         B2["/ws/fridge"]:::backend
         B3["/ws/chat"]:::backend
-        B4["OneNET Relay"]:::backend
+        B4["OneNET 中继"]:::backend
     end
 
-    subgraph AI["AI Agent 层"]
+    subgraph AI["🧠 AI Agent 层"]
         direction LR
         C1["主 Agent<br/>厨房助手"]:::agent
-        C2["recipe<br/>_expert"]:::subagent
-        C3["substitution<br/>_expert"]:::subagent
-        C4["cooking<br/>_expert"]:::subagent
-        C5["5层中间件"]:::middleware
+        C2["菜谱推荐专家"]:::subagent
+        C3["食材替换专家"]:::subagent
+        C4["烹饪知识专家"]:::subagent
+        C5["五层中间件"]:::middleware
     end
 
-    subgraph RAG["RAG 检索层"]
+    subgraph RAG["🔍 数据检索层"]
         direction LR
         D1["智能路由"]:::rag
-        D2["Neo4j 图谱"]:::rag
-        D3["Milvus 向量"]:::rag
+        D2["Neo4j 知识图谱"]:::rag
+        D3["Milvus 向量库"]:::rag
         D4["BM25 关键词"]:::rag
     end
 
-    subgraph IOT["IoT 感知层"]
+    subgraph IOT["🌐 IoT 感知层"]
         direction LR
-        E1["OneNET 云"]:::iot
-        E2["RK3588 边缘"]:::iot
+        E1["OneNET 云平台"]:::iot
+        E2["RK3588 边缘端"]:::iot
         E3["MQTT 协议"]:::iot
         E4["冰箱传感器"]:::iot
     end
 
     FG -->|"WebSocket / HTTP"| BE
-    BE -->|"invoke"| AI
-    AI -->|"RAG 查询"| RAG
+    BE -->|"Agent 调用"| AI
+    AI -->|"RAG 检索"| RAG
     BE -.->|"MQTT 轮询"| IOT
 
-    classDef frontend fill:#eef2ff,stroke:#6366f1,stroke-width:2px,color:#3730a3
-    classDef backend  fill:#f0fdf4,stroke:#22c55e,stroke-width:2px,color:#166534
-    classDef agent    fill:#faf5ff,stroke:#a855f7,stroke-width:2px,color:#6b21a8
-    classDef subagent fill:#f3e8ff,stroke:#c084fc,stroke-width:1.5px,color:#7c3aed
-    classDef middleware fill:#fef2f2,stroke:#f87171,stroke-width:1.5px,color:#b91c1c
+    classDef frontend fill:#eff6ff,stroke:#3b82f6,stroke-width:2px,color:#1e40af
+    classDef backend  fill:#f0fdf4,stroke:#10b981,stroke-width:2px,color:#065f46
+    classDef agent    fill:#f5f3ff,stroke:#8b5cf6,stroke-width:2px,color:#5b21b6
+    classDef subagent fill:#faf5ff,stroke:#a78bfa,stroke-width:1.5px,color:#6d28d9
+    classDef middleware fill:#fff1f2,stroke:#f43f5e,stroke-width:1.5px,color:#9f1239
     classDef rag      fill:#fffbeb,stroke:#f59e0b,stroke-width:2px,color:#92400e
-    classDef iot      fill:#f1f5f9,stroke:#64748b,stroke-width:2px,color:#334155
+    classDef iot      fill:#f8fafc,stroke:#64748b,stroke-width:2px,color:#334155
 ```
 
 ### Agent 对话流程
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {
-  'actorBkg': '#eef2ff', 'actorBorder': '#6366f1', 'actorTextColor': '#3730a3',
-  'actorLineColor': '#c7d2fe', 'signalColor': '#475569', 'signalTextColor': '#1e293b',
+  'actorBkg': '#f5f3ff', 'actorBorder': '#8b5cf6', 'actorTextColor': '#5b21b6',
+  'actorLineColor': '#c4b5fd', 'signalColor': '#475569', 'signalTextColor': '#1e293b',
   'labelBoxBkgColor': '#f8fafc', 'labelBoxBorderColor': '#e2e8f0',
   'noteBkgColor': '#fffbeb', 'noteBorderColor': '#f59e0b',
-  'activationBkgColor': '#e0e7ff', 'activationBorderColor': '#818cf8',
+  'activationBkgColor': '#ede9fe', 'activationBorderColor': '#a78bfa',
   'fontFamily': 'system-ui, sans-serif', 'fontSize': '13px'
 }}}%%
 sequenceDiagram
     actor U as 👤 用户
     participant WS as WebSocket
     participant AG as 主 Agent
-    participant RE as recipe_expert
+    participant RE as 菜谱推荐专家
     participant RG as GraphRAG
-    participant DB as 菜谱库
+    participant DB as 菜谱数据库
 
     U->>WS: "冰箱里有什么? 推荐几道菜"
     activate WS
-    WS->>AG: invoke(messages)
+    WS->>AG: 调用 Agent
     activate AG
-    AG->>AG: get_fridge_inventory()
-    Note right of AG: 返回: 鸡蛋×6, 西红柿×3...
-    AG->>RE: recommend_by_fridge(偏好)
+    AG->>AG: 获取冰箱库存
+    Note right of AG: 鸡蛋×6, 西红柿×3...
+    AG->>RE: 按库存推荐(偏好)
     activate RE
-    RE->>RG: ask_question_with_routing()
+    RE->>RG: 知识检索查询
     activate RG
     RG->>DB: 混合检索 (图谱+向量+BM25)
     activate DB
-    DB-->>RG: top-10 匹配结果
+    DB-->>RG: Top-10 匹配结果
     deactivate DB
     RG-->>RE: 检索上下文
     deactivate RG
     RE-->>AG: 结构化推荐列表
     deactivate RE
-    AG-->>WS: stream_tokens 推送
+    AG-->>WS: Token 流式推送
     deactivate AG
     WS-->>U: 菜谱推荐 + 烹饪建议
     deactivate WS
