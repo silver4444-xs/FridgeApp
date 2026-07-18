@@ -224,20 +224,20 @@ sequenceDiagram
 flowchart TB
     Q["🔍 用户查询"] --> R{"🧭 智能路由"}
 
-    R -->|"图谱增强"| N["🕸️ Neo4j 知识图谱<br/><small>实体-关系推理</small>"]:::graph
-    R -->|"语义向量"| M["🔢 Milvus 向量检索<br/><small>BGE 中文嵌入</small>"]:::vector
-    R -->|"关键词"| B["📊 BM25 关键词<br/><small>倒排索引匹配</small>"]:::keyword
+    R -->|"图谱增强"| N["🕸️ Neo4j 知识图谱<br/>实体-关系推理"]:::kg
+    R -->|"语义向量"| M["🔢 Milvus 向量检索<br/>BGE 中文嵌入"]:::vec
+    R -->|"关键词"| B["📊 BM25 关键词<br/>倒排索引匹配"]:::kw
 
-    N --> F["🔗 结果融合<br/><small>去重 · 重排序</small>"]:::fusion
+    N --> F["🔗 结果融合 · 去重重排序"]:::merge
     M --> F
     B --> F
 
-    F --> O["✅ Top-K 检索结果"]
+    F --> O["✅ 最优检索结果"]
 
-    classDef graph fill:#f0fdf4,stroke:#10b981,stroke-width:2px,color:#065f46
-    classDef vector fill:#eff6ff,stroke:#3b82f6,stroke-width:2px,color:#1e40af
-    classDef keyword fill:#fffbeb,stroke:#f59e0b,stroke-width:2px,color:#92400e
-    classDef fusion fill:#f5f3ff,stroke:#8b5cf6,stroke-width:2px,color:#5b21b6
+    classDef kg fill:#f0fdf4,stroke:#10b981,stroke-width:2px,color:#065f46
+    classDef vec fill:#eff6ff,stroke:#3b82f6,stroke-width:2px,color:#1e40af
+    classDef kw fill:#fffbeb,stroke:#f59e0b,stroke-width:2px,color:#92400e
+    classDef merge fill:#f5f3ff,stroke:#8b5cf6,stroke-width:2px,color:#5b21b6
 ```
 
 ---
@@ -302,11 +302,11 @@ flowchart TB
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'system-ui, sans-serif', 'fontSize': '13px', 'lineColor': '#94a3b8'}}}%%
 flowchart LR
-    A["📥 用户请求"] --> M1["① 频率限制<br/><small>单轮最多15次调用</small>"]
-    M1 --> M2["② 摘要压缩<br/><small>超4000 tokens 自动压缩</small>"]
-    M2 --> M3["③ 人工审批<br/><small>写入操作需用户确认</small>"]
-    M3 --> M4["④ 模型重试<br/><small>API容错 3次指数退避</small>"]
-    M4 --> M5["⑤ 工具重试<br/><small>调用容错 2次重试</small>"]
+    A["📥 用户请求"] --> M1["① 频率限制<br/>单轮最多15次调用"]
+    M1 --> M2["② 摘要压缩<br/>超4000 tokens 自动压缩"]
+    M2 --> M3["③ 人工审批<br/>写入操作需用户确认"]
+    M3 --> M4["④ 模型重试<br/>API容错 3次指数退避"]
+    M4 --> M5["⑤ 工具重试<br/>调用容错 2次重试"]
     M5 --> B["🤖 Agent 执行"]
 
     classDef base fill:#f8fafc,stroke:#94a3b8,stroke-width:1.5px,color:#334155
