@@ -5,142 +5,175 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+    background: #ffffff;
     display: flex; justify-content: center; align-items: center;
-    min-height: 100vh; padding: 40px;
+    min-height: 100vh; padding: 32px 40px;
   }
-  .container { width: 1100px; }
-  .title {
-    text-align: center; color: #e2e8f0; font-size: 24px; font-weight: 700;
-    margin-bottom: 36px; letter-spacing: 0.05em;
-  }
-  .title span { color: #38bdf8; }
+  .wrap { width: 960px; }
 
-  .layer {
-    display: flex; align-items: stretch; border-radius: 12px;
-    margin-bottom: 0; position: relative;
+  .title-row {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 28px;
   }
-  .layer-label {
-    min-width: 130px; display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 13px; color: #fff;
-    border-radius: 10px 0 0 10px; letter-spacing: 0.03em;
-    writing-mode: horizontal-tb; padding: 12px 16px;
-  }
-  .layer-content {
-    flex: 1; display: flex; flex-wrap: wrap; gap: 10px;
-    padding: 14px 18px; align-items: center;
-    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
-    border-left: none; border-radius: 0 10px 10px 0;
-  }
-  .layer + .layer { margin-top: 3px; }
-
-  .layer-frontend .layer-label { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-  .layer-backend  .layer-label { background: linear-gradient(135deg, #10b981, #059669); }
-  .layer-ai       .layer-label { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
-  .layer-rag      .layer-label { background: linear-gradient(135deg, #f59e0b, #d97706); }
-  .layer-iot      .layer-label { background: linear-gradient(135deg, #64748b, #475569); }
-
-  .component {
-    background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 8px; padding: 10px 16px; text-align: center;
-    color: #e2e8f0; font-size: 13px; font-weight: 600;
-    white-space: nowrap;
-  }
-  .component.sub {
-    font-size: 11px; font-weight: 500; padding: 7px 12px;
-    background: rgba(255,255,255,0.04); color: #94a3b8;
-  }
-
-  .connector {
+  .title-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: linear-gradient(135deg, #3b82f6, #6366f1);
     display: flex; align-items: center; justify-content: center;
-    height: 20px; position: relative;
+    color: #fff; font-size: 18px; font-weight: 700;
   }
-  .connector::before {
-    content: ''; position: absolute;
-    width: 2px; height: 100%;
-    background: linear-gradient(to bottom, rgba(148,163,184,0.6), rgba(148,163,184,0.1));
+  .title-row h2 { font-size: 20px; font-weight: 700; color: #0f172a; letter-spacing: -0.02em; }
+
+  .block { margin-bottom: 18px; }
+  .block-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
   }
-  .arrow-down {
-    width: 0; height: 0;
-    border-left: 7px solid transparent;
-    border-right: 7px solid transparent;
-    border-top: 8px solid rgba(148,163,184,0.4);
+  .block-dot {
+    width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0;
+  }
+  .block-label {
+    font-size: 13px; font-weight: 700; color: #334155;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .block-tech {
+    margin-left: auto; font-size: 11px; color: #94a3b8; font-weight: 500;
   }
 
-  .tech-tag {
-    margin-left: auto; font-size: 10px; color: #64748b;
+  .card-row {
+    display: flex; gap: 8px; flex-wrap: wrap;
   }
+  .card {
+    padding: 10px 18px; border-radius: 8px;
+    font-size: 13px; font-weight: 600; color: #1e293b;
+    border: 1px solid #e2e8f0; background: #f8fafc;
+    white-space: nowrap; letter-spacing: -0.01em;
+  }
+  .card.hl {
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .card.accent {
+    color: #fff; border: none; font-weight: 600;
+  }
+
+  .arrow-row {
+    display: flex; justify-content: center; padding: 4px 0 8px 0;
+  }
+  .arrow-row svg { display: block; }
+
+  .split-row {
+    display: flex; gap: 14px;
+  }
+  .split-col { flex: 1; }
+
+  .c-fg  .block-dot { background: #3b82f6; } .c-fg  .accent { background: #3b82f6; }
+  .c-be  .block-dot { background: #10b981; } .c-be  .accent { background: #10b981; }
+  .c-ai  .block-dot { background: #8b5cf6; } .c-ai  .accent { background: #8b5cf6; }
+  .c-rag .block-dot { background: #f59e0b; } .c-rag .accent { background: #f59e0b; }
+  .c-iot .block-dot { background: #64748b; } .c-iot .accent { background: #64748b; }
 </style>
 </head>
 <body>
-<div class="container">
-  <div class="title">FridgeAI <span>系统架构</span></div>
+<div class="wrap">
 
-  <div class="layer layer-frontend">
-    <div class="layer-label">📱 前端展示层</div>
-    <div class="layer-content">
-      <div class="component">🧊 冰箱库存</div>
-      <div class="component">💬 AI 对话</div>
-      <div class="component">📋 菜谱浏览</div>
-      <div class="component">🔍 智能搜索</div>
-      <div class="component">⚙️ 设置管理</div>
-      <div class="tech-tag">uni-app · Vue 3 · WebSocket</div>
+  <div class="title-row">
+    <div class="title-icon">S</div>
+    <h2>FridgeAI 系统架构</h2>
+  </div>
+
+  <!-- Frontend -->
+  <div class="block c-fg">
+    <div class="block-header">
+      <div class="block-dot"></div>
+      <div class="block-label">Frontend · 前端展示层</div>
+      <div class="block-tech">uni-app &nbsp; Vue 3 &nbsp; WebSocket</div>
+    </div>
+    <div class="card-row">
+      <div class="card hl">冰箱库存管理</div>
+      <div class="card hl">AI 对话面板</div>
+      <div class="card hl">菜谱浏览与搜索</div>
+      <div class="card hl">用户设置</div>
     </div>
   </div>
 
-  <div class="connector"><div class="arrow-down"></div></div>
+  <div class="arrow-row">
+    <svg width="20" height="18"><defs><marker id="a1" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker></defs><line x1="10" y1="0" x2="10" y2="12" stroke="#cbd5e1" stroke-width="1.5" marker-end="url(#a1)"/></svg>
+  </div>
 
-  <div class="layer layer-backend">
-    <div class="layer-label">⚡ API 网关层</div>
-    <div class="layer-content">
-      <div class="component">🌐 REST API</div>
-      <div class="component">🔌 /ws/fridge</div>
-      <div class="component">💬 /ws/chat</div>
-      <div class="component">📡 OneNET Relay</div>
-      <div class="tech-tag">FastAPI · Uvicorn · Pydantic</div>
+  <!-- Backend -->
+  <div class="block c-be">
+    <div class="block-header">
+      <div class="block-dot"></div>
+      <div class="block-label">API Gateway · 网关层</div>
+      <div class="block-tech">FastAPI &nbsp; Uvicorn &nbsp; Pydantic</div>
+    </div>
+    <div class="card-row">
+      <div class="card hl">REST API</div>
+      <div class="card hl">/ws/fridge</div>
+      <div class="card hl">/ws/chat</div>
+      <div class="card hl">OneNET Relay</div>
     </div>
   </div>
 
-  <div class="connector"><div class="arrow-down"></div></div>
+  <div class="arrow-row">
+    <svg width="20" height="18"><line x1="10" y1="0" x2="10" y2="12" stroke="#cbd5e1" stroke-width="1.5" marker-end="url(#a1)"/></svg>
+  </div>
 
-  <div class="layer layer-ai">
-    <div class="layer-label">🧠 AI Agent 层</div>
-    <div class="layer-content">
-      <div class="component">主 Agent<br><span style="font-size:10px;color:#94a3b8">厨房助手</span></div>
-      <div class="component sub">🍳 recipe_expert</div>
-      <div class="component sub">🔄 substitution</div>
-      <div class="component sub">📖 cooking</div>
-      <div class="component sub">🛡️ 5层中间件</div>
-      <div class="tech-tag">LangGraph · StateGraph · HITL</div>
+  <!-- AI Agent + RAG side by side -->
+  <div class="split-row">
+    <!-- AI Agent -->
+    <div class="split-col">
+      <div class="block c-ai">
+        <div class="block-header">
+          <div class="block-dot"></div>
+          <div class="block-label">AI Agent 层</div>
+          <div class="block-tech">LangGraph &nbsp; StateGraph</div>
+        </div>
+        <div class="card-row">
+          <div class="card accent">主 Agent</div>
+          <div class="card hl">recipe_expert</div>
+          <div class="card hl">substitution</div>
+          <div class="card hl">cooking</div>
+          <div class="card hl">5-layer Middleware</div>
+        </div>
+      </div>
+    </div>
+    <!-- RAG -->
+    <div class="split-col">
+      <div class="block c-rag">
+        <div class="block-header">
+          <div class="block-dot"></div>
+          <div class="block-label">Data &amp; RAG 检索层</div>
+          <div class="block-tech">GraphRAG &nbsp; BM25 &nbsp; BGE</div>
+        </div>
+        <div class="card-row">
+          <div class="card accent">智能路由</div>
+          <div class="card hl">Neo4j 知识图谱</div>
+          <div class="card hl">Milvus 向量检索</div>
+          <div class="card hl">323 道菜谱库</div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="connector"><div class="arrow-down"></div></div>
+  <div class="arrow-row">
+    <svg width="20" height="18"><line x1="10" y1="0" x2="10" y2="12" stroke="#cbd5e1" stroke-width="1.5" marker-end="url(#a1)"/></svg>
+  </div>
 
-  <div class="layer layer-rag">
-    <div class="layer-label">🔍 数据检索层</div>
-    <div class="layer-content">
-      <div class="component">🧭 智能路由</div>
-      <div class="component">🕸️ Neo4j 图谱</div>
-      <div class="component">🔢 Milvus 向量</div>
-      <div class="component">📚 323道菜谱</div>
-      <div class="tech-tag">GraphRAG · BM25 · BGE 嵌入</div>
+  <!-- IoT -->
+  <div class="block c-iot">
+    <div class="block-header">
+      <div class="block-dot"></div>
+      <div class="block-label">IoT · 感知层</div>
+      <div class="block-tech">OneNET &nbsp; MQTT &nbsp; RK3588</div>
+    </div>
+    <div class="card-row">
+      <div class="card hl">OneNET 云平台</div>
+      <div class="card hl">RK3588 边缘端</div>
+      <div class="card hl">MQTT 数据上报</div>
+      <div class="card hl">冰箱传感器</div>
     </div>
   </div>
 
-  <div class="connector"><div class="arrow-down"></div></div>
-
-  <div class="layer layer-iot">
-    <div class="layer-label">🌐 IoT 感知层</div>
-    <div class="layer-content">
-      <div class="component">☁️ OneNET 云平台</div>
-      <div class="component">🔧 RK3588 边缘端</div>
-      <div class="component">📡 MQTT 协议</div>
-      <div class="component">🧊 智能冰箱</div>
-      <div class="tech-tag">实时传感 · 自动同步</div>
-    </div>
-  </div>
 </div>
 </body>
 </html>

@@ -5,175 +5,188 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+    background: #ffffff;
     display: flex; justify-content: center; align-items: center;
     min-height: 100vh; padding: 40px;
   }
-  .container { width: 1050px; }
-  .title {
-    text-align: center; color: #e2e8f0; font-size: 24px; font-weight: 700;
-    margin-bottom: 40px; letter-spacing: 0.05em;
-  }
-  .title span { color: #a78bfa; }
+  .wrap { width: 900px; }
 
-  .step {
-    display: flex; align-items: center; gap: 0;
-    margin-bottom: 2px;
+  .title-row {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 32px;
   }
-  .step-num {
-    min-width: 48px; height: 48px;
+  .title-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: linear-gradient(135deg, #8b5cf6, #6366f1);
     display: flex; align-items: center; justify-content: center;
-    font-size: 18px; font-weight: 800; color: #fff;
-    border-radius: 10px;
+    color: #fff; font-size: 18px; font-weight: 700;
   }
-  .step-card {
-    flex: 1; display: flex; align-items: center;
-    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px; padding: 16px 20px; gap: 16px;
+  .title-row h2 { font-size: 20px; font-weight: 700; color: #0f172a; letter-spacing: -0.02em; }
+
+  .lane {
+    display: flex; margin-bottom: 0; position: relative;
   }
-  .step-icon {
-    width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
-    font-size: 22px; border-radius: 10px; flex-shrink: 0;
+  .lane-num {
+    width: 38px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
   }
-  .step-body { flex: 1; }
-  .step-title { color: #e2e8f0; font-size: 14px; font-weight: 700; margin-bottom: 2px; }
-  .step-desc { color: #94a3b8; font-size: 12px; }
-  .step-agent {
-    font-size: 10px; color: #64748b; background: rgba(255,255,255,0.05);
-    padding: 4px 10px; border-radius: 6px; white-space: nowrap;
+  .lane-num-circle {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 13px; font-weight: 800;
+    position: relative; z-index: 1;
+  }
+  .lane-num-line {
+    flex: 1; width: 2px; min-height: 8px;
   }
 
-  .connector {
-    display: flex; align-items: center; padding-left: 24px;
-    height: 22px;
+  .lane-card {
+    flex: 1; display: flex; align-items: center; gap: 14px;
+    padding: 14px 18px; margin-bottom: 0;
+    border: 1px solid #e2e8f0; border-radius: 8px;
+    background: #f8fafc; margin-left: 8px;
   }
-  .connector-line {
-    width: 2px; height: 100%;
-    background: linear-gradient(to bottom, rgba(139,92,246,0.5), rgba(139,92,246,0.1));
+  .lane-icon {
+    width: 40px; height: 40px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700;
+  }
+  .lane-body { flex: 1; }
+  .lane-title { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 3px; }
+  .lane-desc { font-size: 12px; color: #64748b; line-height: 1.5; }
+  .lane-badge {
+    font-size: 10px; color: #64748b; background: #f1f5f9;
+    padding: 4px 10px; border-radius: 20px; font-weight: 600;
+    white-space: nowrap; letter-spacing: 0.02em;
+  }
+  .lane-badge.pill {
+    font-size: 10px; color: #f59e0b; background: #fffbeb;
+    border: 1px solid #fde68a; padding: 3px 10px; border-radius: 12px;
   }
 
-  .s1 .step-num { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-  .s1 .step-icon { background: rgba(59,130,246,0.15); }
-  .s2 .step-num { background: linear-gradient(135deg, #10b981, #059669); }
-  .s2 .step-icon { background: rgba(16,185,129,0.15); }
-  .s3 .step-num { background: linear-gradient(135deg, #f59e0b, #d97706); }
-  .s3 .step-icon { background: rgba(245,158,11,0.15); }
-  .s4 .step-num { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
-  .s4 .step-icon { background: rgba(139,92,246,0.15); }
-  .s5 .step-num { background: linear-gradient(135deg, #ec4899, #db2777); }
-  .s5 .step-icon { background: rgba(236,72,153,0.15); }
-  .s6 .step-num { background: linear-gradient(135deg, #06b6d4, #0891b2); }
-  .s6 .step-icon { background: rgba(6,182,212,0.15); }
-  .s7 .step-num { background: linear-gradient(135deg, #84cc16, #65a30d); }
-  .s7 .step-icon { background: rgba(132,204,22,0.15); }
+  .s1 .lane-num-circle { background: #3b82f6; } .s1 .lane-icon { background: #eff6ff; color: #3b82f6; } .s1 .lane-num-line { background: #3b82f6; }
+  .s2 .lane-num-circle { background: #10b981; } .s2 .lane-icon { background: #ecfdf5; color: #10b981; } .s2 .lane-num-line { background: #10b981; }
+  .s3 .lane-num-circle { background: #f59e0b; } .s3 .lane-icon { background: #fffbeb; color: #f59e0b; } .s3 .lane-num-line { background: #f59e0b; }
+  .s4 .lane-num-circle { background: #8b5cf6; } .s4 .lane-icon { background: #f5f3ff; color: #8b5cf6; } .s4 .lane-num-line { background: #8b5cf6; }
+  .s5 .lane-num-circle { background: #ec4899; } .s5 .lane-icon { background: #fdf2f8; color: #ec4899; } .s5 .lane-num-line { background: #ec4899; }
+  .s6 .lane-num-circle { background: #06b6d4; } .s6 .lane-icon { background: #ecfeff; color: #06b6d4; } .s6 .lane-num-line { background: #06b6d4; }
+  .s7 .lane-num-circle { background: #22c55e; } .s7 .lane-icon { background: #f0fdf4; color: #22c55e; } .s7 .lane-num-line { background: #22c55e; }
 
-  .parallel-badge {
-    display: inline-block; font-size: 10px; color: #fbbf24;
-    background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.2);
-    padding: 2px 8px; border-radius: 4px; margin-left: 8px;
-  }
+  .lane:last-child .lane-num-line { background: transparent; }
 </style>
 </head>
 <body>
-<div class="container">
-  <div class="title">FridgeAI <span>Agent 对话流程</span></div>
+<div class="wrap">
 
-  <div class="step s1">
-    <div class="step-num">1</div>
-    <div class="step-card">
-      <div class="step-icon">💬</div>
-      <div class="step-body">
-        <div class="step-title">用户发送消息</div>
-        <div class="step-desc">"冰箱里有什么？帮我推荐几道菜"</div>
+  <div class="title-row">
+    <div class="title-icon">F</div>
+    <h2>FridgeAI Agent 对话流程</h2>
+  </div>
+
+  <div class="lane s1">
+    <div class="lane-num">
+      <div class="lane-num-circle">1</div>
+      <div class="lane-num-line"></div>
+    </div>
+    <div class="lane-card">
+      <div class="lane-icon" style="font-size:18px">MSG</div>
+      <div class="lane-body">
+        <div class="lane-title">用户通过 WebSocket 发送消息</div>
+        <div class="lane-desc">"冰箱里有什么? 帮我推荐几道菜" → 前端 WS 客户端发出</div>
       </div>
-      <div class="step-agent">📱 移动端 → WebSocket</div>
+      <div class="lane-badge">ws/chat</div>
     </div>
   </div>
 
-  <div class="connector"><div class="connector-line"></div></div>
-
-  <div class="step s2">
-    <div class="step-num">2</div>
-    <div class="step-card">
-      <div class="step-icon">📡</div>
-      <div class="step-body">
-        <div class="step-title">获取冰箱库存</div>
-        <div class="step-desc">调用 get_fridge_inventory() → [鸡蛋×6, 西红柿×3, 牛奶×1, ...]</div>
+  <div class="lane s2">
+    <div class="lane-num">
+      <div class="lane-num-circle">2</div>
+      <div class="lane-num-line"></div>
+    </div>
+    <div class="lane-card">
+      <div class="lane-icon" style="font-size:18px">INV</div>
+      <div class="lane-body">
+        <div class="lane-title">Agent 调用 get_fridge_inventory 获取库存</div>
+        <div class="lane-desc">返回当前冰箱食材清单 — 鸡蛋×6, 西红柿×3, 牛奶×1, 青椒×2 ...</div>
       </div>
-      <div class="step-agent">🔧 Tool: get_fridge_inventory</div>
+      <div class="lane-badge">Tool Call</div>
     </div>
   </div>
 
-  <div class="connector"><div class="connector-line"></div></div>
-
-  <div class="step s3">
-    <div class="step-num">3</div>
-    <div class="step-card">
-      <div class="step-icon">🎯</div>
-      <div class="step-body">
-        <div class="step-title">主 Agent 路由决策</div>
-        <div class="step-desc">分析意图 → 分发到 recipe_expert 子 Agent（菜谱推荐场景）</div>
+  <div class="lane s3">
+    <div class="lane-num">
+      <div class="lane-num-circle">3</div>
+      <div class="lane-num-line"></div>
+    </div>
+    <div class="lane-card">
+      <div class="lane-icon" style="font-size:18px">ROU</div>
+      <div class="lane-body">
+        <div class="lane-title">主 Agent 分析意图并路由到子 Agent</div>
+        <div class="lane-desc">识别为菜谱推荐场景 → 分发至 recipe_expert，传入库存数据与用户偏好</div>
       </div>
-      <div class="step-agent">🧠 主 Agent → recipe_expert</div>
+      <div class="lane-badge">主 Agent → recipe_expert</div>
     </div>
   </div>
 
-  <div class="connector"><div class="connector-line"></div></div>
-
-  <div class="step s4">
-    <div class="step-num">4</div>
-    <div class="step-card">
-      <div class="step-icon">🔍</div>
-      <div class="step-body">
-        <div class="step-title">GraphRAG 混合检索 <span class="parallel-badge">并行</span></div>
-        <div class="step-desc">智能路由 → Neo4j 知识图谱 + Milvus 向量检索 + BM25 关键词</div>
+  <div class="lane s4">
+    <div class="lane-num">
+      <div class="lane-num-circle">4</div>
+      <div class="lane-num-line"></div>
+    </div>
+    <div class="lane-card">
+      <div class="lane-icon" style="font-size:18px">RAG</div>
+      <div class="lane-body">
+        <div class="lane-title">GraphRAG 混合检索 <span class="lane-badge pill">并行</span></div>
+        <div class="lane-desc">Neo4j 知识图谱推理 + Milvus 向量语义检索 + BM25 关键词匹配 → 融合排序</div>
       </div>
-      <div class="step-agent">🕸️ Neo4j · 🔢 Milvus · 📊 BM25</div>
+      <div class="lane-badge">Neo4j &nbsp; Milvus &nbsp; BM25</div>
     </div>
   </div>
 
-  <div class="connector"><div class="connector-line"></div></div>
-
-  <div class="step s5">
-    <div class="step-num">5</div>
-    <div class="step-card">
-      <div class="step-icon">🧩</div>
-      <div class="step-body">
-        <div class="step-title">结果融合与排序</div>
-        <div class="step-desc">检索结果去重融合 → 结合用户偏好过滤 → Top-5 推荐生成</div>
+  <div class="lane s5">
+    <div class="lane-num">
+      <div class="lane-num-circle">5</div>
+      <div class="lane-num-line"></div>
+    </div>
+    <div class="lane-card">
+      <div class="lane-icon" style="font-size:18px">FLT</div>
+      <div class="lane-body">
+        <div class="lane-title">偏好过滤与结果融合</div>
+        <div class="lane-desc">去重融合多路结果 → 按用户忌口过滤 → 结合口味偏好排序 → 生成 Top-5</div>
       </div>
-      <div class="step-agent">📋 偏好过滤 · 结构化输出</div>
+      <div class="lane-badge">结构化输出</div>
     </div>
   </div>
 
-  <div class="connector"><div class="connector-line"></div></div>
-
-  <div class="step s6">
-    <div class="step-num">6</div>
-    <div class="step-card">
-      <div class="step-icon">✍️</div>
-      <div class="step-body">
-        <div class="step-title">大模型生成回复</div>
-        <div class="step-desc">DeepSeek V4 结合检索上下文 + 用户偏好 → 生成个性化推荐文本</div>
+  <div class="lane s6">
+    <div class="lane-num">
+      <div class="lane-num-circle">6</div>
+      <div class="lane-num-line"></div>
+    </div>
+    <div class="lane-card">
+      <div class="lane-icon" style="font-size:18px">LLM</div>
+      <div class="lane-body">
+        <div class="lane-title">大模型生成个性化推荐文本</div>
+        <div class="lane-desc">DeepSeek V4 Flash 结合检索上下文 + 用户偏好 → 生成贴心推荐回复</div>
       </div>
-      <div class="step-agent">🤖 DeepSeek V4 Flash</div>
+      <div class="lane-badge">DeepSeek V4</div>
     </div>
   </div>
 
-  <div class="connector"><div class="connector-line"></div></div>
-
-  <div class="step s7">
-    <div class="step-num">7</div>
-    <div class="step-card">
-      <div class="step-icon">⚡</div>
-      <div class="step-body">
-        <div class="step-title">流式推送回复</div>
-        <div class="step-desc">Token 级实时推送 → 前端打字机渲染，含菜谱图片和富文本格式</div>
+  <div class="lane s7">
+    <div class="lane-num">
+      <div class="lane-num-circle">7</div>
+      <div class="lane-num-line"></div>
+    </div>
+    <div class="lane-card">
+      <div class="lane-icon" style="font-size:18px">OUT</div>
+      <div class="lane-body">
+        <div class="lane-title">流式推送至前端，渲染富文本回复</div>
+        <div class="lane-desc">Token 级 stream_token 推送 → 打字机效果，含菜谱图片、表格、格式文本</div>
       </div>
-      <div class="step-agent">📡 stream_token · WebSocket</div>
+      <div class="lane-badge">stream_token</div>
     </div>
   </div>
+
 </div>
 </body>
 </html>
