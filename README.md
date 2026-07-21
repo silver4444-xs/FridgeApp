@@ -316,6 +316,54 @@ flowchart LR
     class M3 crit
 ```
 
+### Agent ReAct 循环
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'system-ui, sans-serif', 'fontSize': '13px', 'lineColor': '#94a3b8'}}}%%
+flowchart TB
+    START["📥 用户消息"]:::user --> THINK{"🤔 LLM 推理<br/>分析意图 + 选择工具"}:::think
+
+    THINK -->|"需要数据"| TOOL["🔧 调用工具"]:::tool
+    THINK -->|"信息充足"| DONE["✅ 生成最终回答"]:::done
+
+    TOOL -->|"读取冰箱"| T1["get_fridge_inventory"]:::t
+    TOOL -->|"智能推荐"| T2["recommend_by_fridge"]:::t
+    TOOL -->|"搜索菜谱"| T3["search_recipes_by_ingredients"]:::t
+    TOOL -->|"菜谱详情"| T4["get_recipe_detail"]:::t
+    TOOL -->|"食材替换"| T5["find_substitutions"]:::t
+    TOOL -->|"烹饪问答"| T6["search_cooking_knowledge"]:::t
+    TOOL -->|"保存偏好"| T7["save_user_preferences"]:::t
+    TOOL -->|"读取偏好"| T8["get_user_preferences"]:::t
+
+    T1 --> OBSERVE["👁️ 观察结果<br/>解析工具返回值"]:::observe
+    T2 --> OBSERVE
+    T3 --> OBSERVE
+    T4 --> OBSERVE
+    T5 --> OBSERVE
+    T6 --> OBSERVE
+    T7 --> OBSERVE
+    T8 --> OBSERVE
+
+    OBSERVE --> GUARD{"🛡️ 中间件检查"}:::guard
+    GUARD -->|"超限/需审批"| INTERRUPT["⏸️ 中断等待"]:::interrupt
+    GUARD -->|"通过"| THINK
+
+    INTERRUPT -->|"用户确认"| THINK
+
+    DONE --> STREAM["📤 流式输出<br/>token 逐字推送"]:::stream
+    STREAM --> END["👤 用户看到回答"]:::user
+
+    classDef user fill:#eff6ff,stroke:#3b82f6,stroke-width:2px,color:#1e40af
+    classDef think fill:#f5f3ff,stroke:#8b5cf6,stroke-width:2px,color:#5b21b6
+    classDef tool fill:#fef3c7,stroke:#f59e0b,stroke-width:2px,color:#92400e
+    classDef observe fill:#f0fdf4,stroke:#10b981,stroke-width:2px,color:#065f46
+    classDef guard fill:#fef2f2,stroke:#ef4444,stroke-width:2px,color:#991b1b
+    classDef interrupt fill:#fff1f2,stroke:#f43f5e,stroke-width:1.5px,color:#9f1239
+    classDef done fill:#f0fdf4,stroke:#22c55e,stroke-width:2px,color:#166534
+    classDef stream fill:#f8fafc,stroke:#64748b,stroke-width:2px,color:#334155
+    classDef t fill:#fafaf9,stroke:#d6d3d1,stroke-width:1px,color:#44403c
+```
+
 ### Agent-工具关系
 
 ```mermaid
