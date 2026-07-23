@@ -174,9 +174,9 @@ class AdvancedGraphRAGSystem:
             ck_docs = self.data_module.build_cooking_knowledge_documents()
             chunks.extend(ck_docs)
 
-            # 构建Milvus向量索引
+            # 构建Milvus向量索引（首次启动；后续启动优先 load_collection）
             print("构建Milvus向量索引...")
-            if not self.index_module.build_vector_index(chunks):
+            if not self.index_module.build_vector_index(chunks, force_recreate=True):
                 raise Exception("构建向量索引失败")
 
             # 初始化检索器
@@ -645,7 +645,10 @@ def create_fridge_agent(model_name: str = None,
             "- 用户声明饮食偏好 → 调用 save_user_preferences\n"
             "\n"
             "你的职责是理解用户需求 → 路由到对应专家 → 综合专家的回答返回给用户。\n"
-            "不要自己回答菜谱推荐、替换建议、烹饪知识类问题，交给专家处理。"
+            "不要自己回答菜谱推荐、替换建议、烹饪知识类问题，交给专家处理。\n"
+            "\n"
+            "工具返回格式：所有工具返回统一的 JSON: {\"success\": true/false, \"data\": ..., \"error\": ..., \"message\": ...}。\n"
+            "请先检查 success 字段：true 表示工具执行成功，从 data 获取结果；false 表示失败，查看 error 了解原因。"
         )
 
     # ── 创建 Agent ──

@@ -55,12 +55,11 @@ class GraphDataPreparationModule:
         self._connect()
     
     def _connect(self):
-        """建立Neo4j连接"""
+        """建立Neo4j连接（使用共享驱动单例）。"""
         try:
-            self.driver = GraphDatabase.driver(
-                self.uri,
-                auth=(self.user, self.password),
-                database=self.database
+            from .neo4j_client import Neo4jClient
+            self.driver = Neo4jClient.get_driver(
+                self.uri, self.user, self.password, self.database,
             )
             logger.info(f"已连接到Neo4j数据库: {self.uri}")
 

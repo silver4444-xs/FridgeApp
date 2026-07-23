@@ -80,8 +80,10 @@ def _repair_json_output(text: str) -> str:
             return json.dumps(obj)
     except (ValueError, SyntaxError):
         pass
-    # 最后兜底: 如果是空对象返回 verdict=1 (宽容策略，不因解析失败而惩罚)
-    return '{"reason": "JSON解析失败，使用默认评估结果", "verdict": 1}'
+    # 最后兜底: 解析失败返回 verdict=0 (P1-6: 不因解析失败而给予通过)
+    logger = logging.getLogger("test_ragas")
+    logger.warning(f"_repair_json_output 无法解析，返回 verdict=0。原始文本前200字符: {text[:200]}")
+    return '{"reason": "JSON解析失败", "verdict": 0}'
 
 
 class _JsonPromptInjectionMixin:
@@ -244,7 +246,7 @@ class TestRAGRetrieval:
         print(f"  有效样本: {len(valid)}/{len(cp_list)}, 0分: {zeros}, >0分: {len(non_zero)}")
         if non_zero:
             print(f"  非零分范围: {min(non_zero):.4f}~{max(non_zero):.4f}")
-        assert cp >= 0.25, f"{cp:.4f} < 0.25"
+        assert cp >= 0.50, f"{cp:.4f} < 0.50 (P1-6: 阈值从 0.25 提升)"
 
     @pytest.mark.rag
     @pytest.mark.slow
@@ -308,9 +310,9 @@ class TestRAGGeneration:
             run_config=RunConfig(max_wait=180, max_retries=3, max_workers=8))
 
         thresholds = {
-            "context_precision": 0.25, "context_recall": 0.18,
-            "faithfulness": 0.30, "answer_relevancy": 0.40,
-            "answer_correctness": 0.35,
+            "context_precision": 0.50, "context_recall": 0.40,
+            "faithfulness": 0.60, "answer_relevancy": 0.50,
+            "answer_correctness": 0.50,
         }
 
         print("\n" + "=" * 60)
@@ -329,4 +331,4 @@ class TestRAGGeneration:
             if ok: passed += 1
         print("=" * 60)
         print(f"  通过: {passed}/{len(thresholds)}")
-        assert passed >= 3, f"仅 {passed}/{len(thresholds)} 项达标"
+        assert passed >= 4, f"仅 {passed}/{len(thresholds)} 项达标 (P1-6: 要求从3/5提升到4/5)"

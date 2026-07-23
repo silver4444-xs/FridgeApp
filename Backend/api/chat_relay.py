@@ -11,7 +11,9 @@ import asyncio
 import json
 import logging
 import time
+import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from api.logging_config import request_id_ctx, thread_id_ctx
 
 logger = logging.getLogger(__name__)
 
@@ -52,22 +54,23 @@ async def _handle_chat_stream(ws: WebSocket, message: str, thread_id: str):
         message: 用户消息文本
         thread_id: 对话线程 ID (用于多轮对话持久化)
     """
-    from api.dependencies import fridge_graph
-
-    if not fridge_graph:
-        await ws.send_json({
-            "type": "stream_error",
-            "error": "Agent 未初始化，请稍后重试",
-        })
-        return
-
-    config = {"configurable": {"thread_id": thread_id}}
-
-    # 获取冰箱当前食材快照，注入 Agent context
-    from api.dependencies import get_current_inventory
-    inventory = get_current_inventory()
-
     try:
+        from api.dependencies import fridge_graph
+
+        if not fridge_graph:
+            await ws.send_json({
+                "type": "stream_error",
+                "error": "Agent 未初始化，请稍后重试",
+            })
+            return
+
+        config = {"configurable": {"thread_id": thread_id}}
+
+        # 获取冰箱当前食材快照，注入 Agent context
+        from api.dependencies import get_current_inventory
+        inventory = get_current_inventory()
+
+        logger.info(f"[Chat Stream] Starting graph for thread={thread_id}")
         stream = fridge_graph.astream_events(
             {
                 "messages": [{"role": "user", "content": message}],
@@ -216,15 +219,16 @@ async def ws_chat(websocket: WebSocket):
             msg_type = data.get("type", "")
 
             if msg_type == "chat":
-                # await _handle_chat_stream(websocket, message, thread_id)
-                # 问题: 同一连接中上一条消息未处理完时，下一条阻塞
-                #   多用户场景下所有请求串行排队
-                #
+                message = data.get("message", "")
+                thread_id = data.get("thread_id", "default")
+
+                # 设置请求级日志上下文 (P2-3)
+                request_id_ctx.set(str(uuid.uuid4())[:8])
+                thread_id_ctx.set(thread_id)
+
                 # ── 改进后 (asyncio.create_task 并发): ──
                 # 每条消息用独立 Task 处理，不阻塞消息接收循环
                 # _chat_busy 标记防止同一连接并发重叠（保持 thread_id 对话顺序）
-                message = data.get("message", "")
-                thread_id = data.get("thread_id", "default")
                 if not message:
                     await websocket.send_json({
                         "type": "stream_error",
@@ -253,14 +257,51 @@ async def ws_chat(websocket: WebSocket):
                 if fridge_graph:
                     config = {"configurable": {"thread_id": thread_id}}
                     try:
-                        result = await fridge_graph.ainvoke(
-                            Command(resume={"decisions": [{"type": decision}]}),
-                            config=config,
-                        )
-                        await websocket.send_json({
-                            "type": "stream_done",
-                            "reply": result["messages"][-1].content if result.get("messages") else "",
-                        })
+                        if decision == "reject":
+                            result = await fridge_graph.ainvoke(
+                                Command(resume={"decisions": [{"type": "reject"}]}),
+                                config=config,
+                            )
+                            await websocket.send_json({
+                                "type": "stream_done",
+                                "reply": result["messages"][-1].content if result.get("messages") else "已拒绝该操作。",
+                            })
+                        else:
+                            # 流式恢复审批后的执行
+                            stream = fridge_graph.astream_events(
+                                Command(resume={"decisions": [{"type": "approve"}]}),
+                                config=config,
+                                version="v2",
+                            )
+                            async for event in stream:
+                                ev = event.get("event", "")
+                                if ev == "on_chat_model_stream":
+                                    chunk = event.get("data", {}).get("chunk")
+                                    if chunk is not None:
+                                        token = None
+                                        if hasattr(chunk, "text"):
+                                            token = chunk.text
+                                        elif hasattr(chunk, "content"):
+                                            c = chunk.content
+                                            if isinstance(c, str):
+                                                token = c
+                                            elif isinstance(c, list) and c and isinstance(c[0], dict):
+                                                token = c[0].get("text", "")
+                                        if token:
+                                            await websocket.send_json({"type": "stream_token", "token": token})
+                                elif ev == "on_tool_start":
+                                    await websocket.send_json({
+                                        "type": "stream_tool_start",
+                                        "tool": event.get("name", "unknown"),
+                                    })
+                                elif ev == "on_tool_end":
+                                    out = event.get("data", {}).get("output")
+                                    await websocket.send_json({
+                                        "type": "stream_tool_end",
+                                        "tool": event.get("name", "unknown"),
+                                        "output": str(out)[:500] if out else "",
+                                    })
+                            await websocket.send_json({"type": "stream_done"})
                     except Exception as e:
                         await websocket.send_json({
                             "type": "stream_error",

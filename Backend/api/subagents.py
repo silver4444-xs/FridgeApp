@@ -10,10 +10,11 @@ Phase 6: Subagents 多 Agent 协作
 ToolStrategy 在非 OpenAI/Anthropic/xAI 模型上不可靠。
 子 Agent 输出由主 Agent 消费，system_prompt 格式指令已足够。
 """
+import json
 import logging
 from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRetryMiddleware
-from langchain.tools import tool
+from langchain.tools import tool, ToolRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -109,40 +110,37 @@ def _create_recipe_agent(model, tools, store=None, checkpointer=None):
     )
 
 
-_recipe_subagent = None
-_substitution_subagent = None
-_cooking_subagent = None
-
 @tool("recipe_expert", description="菜谱推荐专家：根据食材推荐可制作的菜谱、提供详细做法和步骤。适用于「能做什么菜」「推荐几个菜」「XX菜怎么做」。")
-def call_recipe_expert(query: str) -> str:
-    """调用菜谱推荐子 Agent。"""
+def call_recipe_expert(query: str, runtime: ToolRuntime) -> str:
+    """调用菜谱推荐子 Agent —— 每次请求创建独立实例，不跨用户共享状态。"""
     from api.tools import (
+        FridgeContext,
         get_recipe_detail,
         recommend_by_fridge,
         search_recipes_by_ingredients,
     )
 
-    global _recipe_subagent
-    if _recipe_subagent is None:
-        from api.tools import get_recipe_detail, recommend_by_fridge, search_recipes_by_ingredients
-        from api.dependencies import fridge_store, fridge_checkpointer
-        _recipe_subagent = _create_recipe_agent(
-            _get_model(),
-            [recommend_by_fridge, search_recipes_by_ingredients, get_recipe_detail],
-            store=fridge_store,
-            checkpointer=fridge_checkpointer,
-        )
+    agent = _create_recipe_agent(
+        _get_model(),
+        [recommend_by_fridge, search_recipes_by_ingredients, get_recipe_detail],
+    )
 
     try:
-        result = _recipe_subagent.invoke({
-            "messages": [{"role": "user", "content": query}],
-        })
+        result = agent.invoke(
+            {"messages": [{"role": "user", "content": query}]},
+            context=FridgeContext(
+                current_inventory=runtime.context.current_inventory,
+                user_preferences=runtime.context.user_preferences,
+                user_id=runtime.context.user_id,
+            ),
+        )
+        from api.tools import ToolResponse
         if "structured_response" in result:
-            return result["structured_response"].model_dump_json(indent=2, ensure_ascii=False)
-        return result["messages"][-1].content
+            return ToolResponse.ok(data=json.loads(result["structured_response"].model_dump_json()))
+        return ToolResponse.ok(data={"answer": result["messages"][-1].content})
     except Exception as e:
         logger.error(f"[recipe_expert] 调用失败: {e}")
-        return f"菜谱专家暂时无法响应: {str(e)[:200]}"
+        return ToolResponse.fail(error=f"菜谱专家暂时无法响应: {str(e)[:200]}")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -181,27 +179,28 @@ def _create_substitution_agent(model, store=None, checkpointer=None):
 
 
 @tool("substitution_expert", description="食材替换专家：为缺少的食材寻找替代方案。适用于「没有XX可以用什么代替」「XX能换成什么」。")
-def call_substitution_expert(query: str) -> str:
-    """调用食材替换子 Agent。"""
-    global _substitution_subagent
-    if _substitution_subagent is None:
-        from api.dependencies import fridge_store, fridge_checkpointer
-        _substitution_subagent = _create_substitution_agent(
-            _get_model(temperature=0.0),
-            store=fridge_store,
-            checkpointer=fridge_checkpointer,
-        )
+def call_substitution_expert(query: str, runtime: ToolRuntime) -> str:
+    """调用食材替换子 Agent —— 每次请求创建独立实例。"""
+    from api.tools import FridgeContext
+
+    agent = _create_substitution_agent(_get_model(temperature=0.0))
 
     try:
-        result = _substitution_subagent.invoke({
-            "messages": [{"role": "user", "content": query}],
-        })
+        result = agent.invoke(
+            {"messages": [{"role": "user", "content": query}]},
+            context=FridgeContext(
+                current_inventory=runtime.context.current_inventory,
+                user_preferences=runtime.context.user_preferences,
+                user_id=runtime.context.user_id,
+            ),
+        )
+        from api.tools import ToolResponse
         if "structured_response" in result:
-            return result["structured_response"].model_dump_json(indent=2, ensure_ascii=False)
-        return result["messages"][-1].content
+            return ToolResponse.ok(data=json.loads(result["structured_response"].model_dump_json()))
+        return ToolResponse.ok(data={"answer": result["messages"][-1].content})
     except Exception as e:
         logger.error(f"[substitution_expert] 调用失败: {e}")
-        return f"替换专家暂时无法响应: {str(e)[:200]}"
+        return ToolResponse.fail(error=f"替换专家暂时无法响应: {str(e)[:200]}")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -243,29 +242,26 @@ def _create_cooking_qa_agent(model, store=None, checkpointer=None):
 
 
 @tool("cooking_expert", description="烹饪知识专家：回答烹饪技巧、食材处理方法、菜系知识等。适用于「怎么让鸡肉更嫩」「川菜有什么特点」「如何挑选西瓜」等知识性问题。")
-def call_cooking_expert(query: str) -> str:
-    """调用烹饪知识子 Agent。
+def call_cooking_expert(query: str, runtime: ToolRuntime) -> str:
+    """调用烹饪知识子 Agent —— 每次请求创建独立实例。"""
+    from api.tools import FridgeContext
 
-    Args:
-        query: 烹饪知识问题，如「如何让鸡肉更嫩」「煎鱼不粘锅的技巧」
-    """
-    global _cooking_subagent
-    if _cooking_subagent is None:
-        from api.dependencies import fridge_store, fridge_checkpointer
-        _cooking_subagent = _create_cooking_qa_agent(
-            _get_model(),
-            store=fridge_store,
-            checkpointer=fridge_checkpointer,
-        )
+    agent = _create_cooking_qa_agent(_get_model())
 
     try:
-        result = _cooking_subagent.invoke({
-            "messages": [{"role": "user", "content": query}],
-        })
-        return result["messages"][-1].content
+        result = agent.invoke(
+            {"messages": [{"role": "user", "content": query}]},
+            context=FridgeContext(
+                current_inventory=runtime.context.current_inventory,
+                user_preferences=runtime.context.user_preferences,
+                user_id=runtime.context.user_id,
+            ),
+        )
+        from api.tools import ToolResponse
+        return ToolResponse.ok(data={"answer": result["messages"][-1].content})
     except Exception as e:
         logger.error(f"[cooking_expert] 调用失败: {e}")
-        return f"烹饪专家暂时无法响应: {str(e)[:200]}"
+        return ToolResponse.fail(error=f"烹饪专家暂时无法响应: {str(e)[:200]}")
 
 
 # ═══════════════════════════════════════════════════════════════

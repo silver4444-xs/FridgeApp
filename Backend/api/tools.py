@@ -48,6 +48,46 @@ class FridgeContext:
     """用户标识，用于 Store namespace 隔离。生产环境应从请求上下文注入。"""
 
 
+# ── 统一工具返回模型 ──
+#   8 个 @tool + 3 个子 Agent wrapper 全部使用此格式返回，
+#   LLM 通过 success 字段判断工具是否执行成功，统一解析逻辑。
+
+class ToolResponse:
+    """所有 @tool 函数的统一返回格式。
+
+    使用方式:
+        ToolResponse.ok(data=results)
+        ToolResponse.fail(error="未找到")
+        ToolResponse.empty("没有匹配结果")
+    """
+
+    def __init__(self, success: bool, data=None, error: str = None, message: str = None):
+        self.success = success
+        self.data = data
+        self.error = error
+        self.message = message
+
+    def to_json(self) -> str:
+        return json.dumps({
+            "success": self.success,
+            "data": self.data,
+            "error": self.error,
+            "message": self.message,
+        }, ensure_ascii=False, indent=2)
+
+    @classmethod
+    def ok(cls, data=None, message: str = None) -> str:
+        return cls(success=True, data=data, message=message).to_json()
+
+    @classmethod
+    def fail(cls, error: str, message: str = None) -> str:
+        return cls(success=False, error=error, message=message).to_json()
+
+    @classmethod
+    def empty(cls, message: str = "没有找到结果") -> str:
+        return cls(success=True, data=[], message=message).to_json()
+
+
 # Tool 0: 获取冰箱当前食材 (ToolRuntime 上下文注入)
 #   后端 relay._last_value 存储最新管道格式快照
 #   省去 LLM 显式传参环节。用户问「能做什么菜」时无需罗列食材。
@@ -73,32 +113,25 @@ def get_fridge_inventory(runtime: ToolRuntime[FridgeContext]) -> str:
     inventory = runtime.context.current_inventory
 
     if not inventory:
-        return json.dumps({
-            "status": "empty",
-            "message": "冰箱里暂时没有食材。请先添加食材到冰箱。",
-            "items": [],
-        }, ensure_ascii=False)
+        return ToolResponse.ok(data=[], message="冰箱里暂时没有食材。请先添加食材到冰箱。")
 
-    # 汇总统计
     total_items = sum(item.get("qty", 0) for item in inventory)
     categories = list(set(item.get("cat", "其他") for item in inventory))
 
-    result = {
-        "status": "ok",
-        "total_items": total_items,
-        "categories": categories,
-        "items": [],
-    }
-
+    items = []
     for item in inventory:
-        result["items"].append({
+        items.append({
             "name": item.get("name", ""),
             "quantity": item.get("qty", 0),
             "calories": item.get("cal", item.get("calories", None)),
             "category": item.get("cat", "其他"),
         })
 
-    return json.dumps(result, ensure_ascii=False, indent=2)
+    return ToolResponse.ok(data={
+        "total_items": total_items,
+        "categories": categories,
+        "items": items,
+    })
 
 
 # @tool
@@ -191,9 +224,9 @@ def search_recipes_by_ingredients(ingredients: List[str], limit: int = 5) -> str
     results = results[:limit]
 
     if not results:
-        return "未找到匹配的菜谱。请尝试添加更多食材或调整搜索条件。"
+        return ToolResponse.empty("未找到匹配的菜谱。请尝试添加更多食材或调整搜索条件。")
 
-    return json.dumps(results, ensure_ascii=False, indent=2)
+    return ToolResponse.ok(data=results)
 
 
 # Tool 2: 获取菜谱详情
@@ -220,10 +253,7 @@ def get_recipe_detail(recipe_id: str) -> str:
 
     recipe = recipe_db.get(recipe_id)
     if not recipe:
-        return json.dumps(
-            {"error": f"未找到菜谱 ID: {recipe_id}"},
-            ensure_ascii=False,
-        )
+        return ToolResponse.fail(error=f"未找到菜谱 ID: {recipe_id}")
 
     detail = {
         "id": recipe["id"],
@@ -236,7 +266,7 @@ def get_recipe_detail(recipe_id: str) -> str:
         "tips": recipe.get("tips", ""),
         "tags": recipe.get("tags", []),
     }
-    return json.dumps(detail, ensure_ascii=False, indent=2)
+    return ToolResponse.ok(data=detail)
 
 
 # Tool 3: 食材替换建议
@@ -266,11 +296,10 @@ def find_substitutions(ingredient_name: str) -> str:
     from langchain_core.messages import HumanMessage
 
     if fridge_model is None:
-        return json.dumps({
-            "ingredient": ingredient_name,
-            "suggestions": [f"{ingredient_name} 可在超市购买或尝试省略"],
-            "note": "（LLM 未初始化，无法生成智能替换建议）",
-        }, ensure_ascii=False)
+        return ToolResponse.ok(
+            data={"ingredient": ingredient_name, "suggestions": [f"{ingredient_name} 可在超市购买或尝试省略"]},
+            message="LLM 未初始化，使用基础建议",
+        )
 
     prompt = (
         f"你是一位专业厨师。用户想做菜但缺少食材「{ingredient_name}」。\n"
@@ -279,16 +308,12 @@ def find_substitutions(ingredient_name: str) -> str:
 
     try:
         response_msg = fridge_model.invoke([HumanMessage(content=prompt)])
-        response = response_msg.content
-        return json.dumps({
+        return ToolResponse.ok(data={
             "ingredient": ingredient_name,
-            "suggestions": response,
-        }, ensure_ascii=False, indent=2)
+            "suggestions": response_msg.content,
+        })
     except Exception as e:
-        return json.dumps({
-            "ingredient": ingredient_name,
-            "error": f"生成建议失败: {str(e)}",
-        }, ensure_ascii=False)
+        return ToolResponse.fail(error=f"生成替换建议失败: {str(e)}")
 
 
 # Tool 4: 烹饪知识 RAG 检索
@@ -316,19 +341,16 @@ def search_cooking_knowledge(question: str) -> str:
     from api.dependencies import rag_system
 
     if not rag_system or not rag_system.system_ready:
-        return json.dumps({
-            "error": "烹饪知识库未就绪，请稍后重试",
-        }, ensure_ascii=False)
+        return ToolResponse.fail(error="烹饪知识库未就绪，请稍后重试")
 
     try:
         result, analysis, _ = rag_system.ask_question_with_routing(
             question, stream=False
         )
-        return result if isinstance(result, str) else str(result)
+        answer = result if isinstance(result, str) else str(result)
+        return ToolResponse.ok(data={"answer": answer, "analysis": str(analysis) if analysis else None})
     except Exception as e:
-        return json.dumps({
-            "error": f"知识检索失败: {str(e)}",
-        }, ensure_ascii=False)
+        return ToolResponse.fail(error=f"知识检索失败: {str(e)}")
 
 
 # Tool 5: 基于冰箱上下文的智能推荐 (ToolRuntime 核心用例)
@@ -374,11 +396,10 @@ def recommend_by_fridge(
     prefs = runtime.context.user_preferences
 
     if not inventory:
-        return json.dumps({
-            "status": "empty",
-            "message": "冰箱里暂时没有食材。请先用「添加食材」功能放入食材，我再为您推荐菜谱。",
-            "recipes": [],
-        }, ensure_ascii=False)
+        return ToolResponse.ok(
+            data={"recipes": [], "fridge_items_count": 0},
+            message="冰箱里暂时没有食材。请先用「添加食材」功能放入食材，我再为您推荐菜谱。",
+        )
 
     # 归一化冰箱中的食材名
     fridge_names = FuzzyMatcher.normalize_fridge_items([
@@ -433,22 +454,20 @@ def recommend_by_fridge(
     results = results[:limit]
 
     if not results:
-        return json.dumps({
-            "status": "no_match",
-            "message": "冰箱中有 {} 种食材，但暂未找到匹配的菜谱。试试添加更多食材。".format(
-                len(inventory)),
-            "available_ingredients": [
-                item.get("name", "") for item in inventory
-            ],
-            "recipes": [],
-        }, ensure_ascii=False)
+        return ToolResponse.ok(
+            data={
+                "recipes": [],
+                "fridge_items_count": len(inventory),
+                "available_ingredients": [item.get("name", "") for item in inventory],
+            },
+            message=f"冰箱中有 {len(inventory)} 种食材，但暂未找到匹配的菜谱。试试添加更多食材。",
+        )
 
-    return json.dumps({
-        "status": "ok",
+    return ToolResponse.ok(data={
         "fridge_items_count": len(inventory),
         "total_matched": len(results),
         "recipes": results,
-    }, ensure_ascii=False, indent=2)
+    })
 
 
 # Long-term Memory 工具 (Phase 3.5: InMemoryStore)
@@ -491,11 +510,10 @@ def save_user_preferences(
         merged = preferences
 
     store.put(("preferences",), user_id, merged)
-    return json.dumps({
-        "status": "ok",
-        "message": f"已保存 {len(merged)} 项偏好到长期记忆",
-        "saved": merged,
-    }, ensure_ascii=False, indent=2)
+    return ToolResponse.ok(
+        data={"saved": merged},
+        message=f"已保存 {len(merged)} 项偏好到长期记忆",
+    )
 
 
 @tool
@@ -519,24 +537,19 @@ def get_user_preferences(
 
     prefs = store.get(("preferences",), user_id)
     if prefs and prefs.value:
-        return json.dumps({
-            "status": "ok",
-            "preferences": prefs.value,
-        }, ensure_ascii=False, indent=2)
+        return ToolResponse.ok(data={"preferences": prefs.value})
 
-    # 回退到 context 中的偏好 (首次对话无历史时)
     fallback = runtime.context.user_preferences
     if fallback:
-        return json.dumps({
-            "status": "ok",
-            "source": "context (本次会话有效，未持久化)",
-            "preferences": fallback,
-        }, ensure_ascii=False, indent=2)
+        return ToolResponse.ok(
+            data={"preferences": fallback, "source": "context"},
+            message="使用本次会话偏好（未持久化）",
+        )
 
-    return json.dumps({
-        "status": "empty",
-        "message": "暂无保存的饮食偏好。您可以告诉我您的忌口、偏好菜系等信息，我会记住。",
-    }, ensure_ascii=False)
+    return ToolResponse.ok(
+        data={"preferences": {}},
+        message="暂无保存的饮食偏好。您可以告诉我您的忌口、偏好菜系等信息，我会记住。",
+    )
 
 
 # 工具列表汇总（供 create_agent 使用）

@@ -63,17 +63,25 @@ class HybridRetrievalModule:
         """初始化检索系统"""
         logger.info("初始化混合检索模块...")
         
-        # 连接Neo4j
-        self.driver = GraphDatabase.driver(
+        # 连接Neo4j（使用共享驱动单例）
+        from .neo4j_client import Neo4jClient
+        self.driver = Neo4jClient.get_driver(
             self.config.neo4j_uri,
-            auth=(self.config.neo4j_user, self.config.neo4j_password),
-            database=self.config.neo4j_database
+            self.config.neo4j_user,
+            self.config.neo4j_password,
+            self.config.neo4j_database,
         )
         
-        # 初始化BM25检索器
+        # 初始化BM25检索器（jieba 中文分词 + 短文档参数）
         if chunks:
-            self.bm25_retriever = BM25Retriever.from_documents(chunks)
-            logger.info(f"BM25检索器初始化完成，文档数量: {len(chunks)}")
+            import jieba
+            from rank_bm25 import BM25Okapi
+
+            self._chunks = chunks
+            tokenized = [list(jieba.cut(doc.page_content)) for doc in chunks]
+            self._bm25 = BM25Okapi(tokenized, k1=1.2, b=0.5)
+            self._bm25_docs = chunks
+            logger.info(f"BM25检索器初始化完成 (jieba分词, k1=1.2, b=0.5)，文档: {len(chunks)}")
         
         # 初始化图索引
         self._build_graph_index()
@@ -539,10 +547,24 @@ class HybridRetrievalModule:
             logger.error(f"获取邻居节点失败: {e}")
             return []
     
+    def _min_max_normalize(self, docs: List[Document], score_key: str = "final_score"):
+        """Min-max 归一化到 [0, 1]——消除三路检索分数不可通约的问题 (P1-5)。"""
+        if not docs:
+            return
+        scores = [d.metadata.get(score_key, 0.0) for d in docs]
+        min_s, max_s = min(scores), max(scores)
+        if max_s == min_s:
+            for d in docs:
+                d.metadata["norm_score"] = 1.0
+        else:
+            for d in docs:
+                d.metadata["norm_score"] = (d.metadata.get(score_key, 0.0) - min_s) / (max_s - min_s)
+
     def hybrid_search(self, query: str, top_k: int = 10) -> List[Document]:
         """
         混合检索：三路融合 (BM25 + 向量 + 图索引)
         加权合并: BM25 0.3, 向量 0.5, 图索引 0.2
+        每路结果先 min-max 归一化到 [0,1] 再做加权融合 (P1-5 修复)。
         """
         logger.info(f"开始混合检索: {query}")
 
@@ -552,48 +574,52 @@ class HybridRetrievalModule:
         # 2. 增强向量检索 (Milvus)
         vector_docs = self.vector_search_enhanced(query, top_k)
 
-        # 3. BM25 关键词检索
+        # 3. BM25 关键词检索（jieba 分词）
         bm25_docs = []
-        if self.bm25_retriever:
+        if hasattr(self, '_bm25') and self._bm25:
             try:
-                bm25_raw = self.bm25_retriever.invoke(query)
-                for rank, doc in enumerate(bm25_raw[:top_k]):
+                import jieba
+                tokenized_query = list(jieba.cut(query))
+                bm25_scores = self._bm25.get_scores(tokenized_query)
+                scored = sorted(
+                    enumerate(bm25_scores), key=lambda x: x[1], reverse=True
+                )[:top_k]
+                for rank, (idx, score) in enumerate(scored):
+                    doc = self._bm25_docs[idx]
                     doc.metadata["search_method"] = "bm25"
+                    doc.metadata["bm25_score"] = float(score)
                     doc.metadata["bm25_rank"] = rank
-                    doc.metadata["final_score"] = 1.0 / (1.0 + rank)  # rank-based scoring
+                    doc.metadata["final_score"] = float(score)
                     bm25_docs.append(doc)
-                logger.info(f"BM25检索: {len(bm25_docs)} 个结果")
+                logger.info(f"BM25检索 (jieba): {len(bm25_docs)} 个结果")
             except Exception as e:
                 logger.error(f"BM25检索失败: {e}")
 
-        # 4. 三路加权融合
-        all_candidates = []
+        # 4. 三路各自 min-max 归一化 (P1-5 核心修复)
+        for doc in dual_docs:
+            doc.metadata["final_score"] = doc.metadata.get("relevance_score", 0.0)
+        for doc in vector_docs:
+            doc.metadata["final_score"] = max(0.0, min(1.0, doc.metadata.get("score", 0.0)))
 
+        self._min_max_normalize(dual_docs)
+        self._min_max_normalize(vector_docs)
+        self._min_max_normalize(bm25_docs)
+
+        # 5. 归一化后的加权融合
+        all_candidates = []
         for doc in dual_docs:
             doc.metadata["search_method"] = "dual_level"
-            doc.metadata["final_score"] = doc.metadata.get("relevance_score", 0.0) * 0.2
+            doc.metadata["final_score"] = doc.metadata.get("norm_score", 0.0) * 0.2
             all_candidates.append(doc)
 
         for doc in vector_docs:
             doc.metadata["search_method"] = "vector_enhanced"
-            vector_score = doc.metadata.get("score", 0.0)
-            similarity = max(0.0, min(1.0, vector_score))
-            doc.metadata["final_score"] = similarity * 0.5
+            doc.metadata["final_score"] = doc.metadata.get("norm_score", 0.0) * 0.5
             all_candidates.append(doc)
 
         for doc in bm25_docs:
-            doc.metadata["final_score"] = doc.metadata["final_score"] * 0.3
+            doc.metadata["final_score"] = doc.metadata.get("norm_score", 0.0) * 0.3
             all_candidates.append(doc)
-
-        # 5. doc_type 域加权: cooking_knowledge 文档在通用烹饪问题中偏低,
-        #    因为图索引的关键词精确匹配天然偏向菜谱实体。给予 cooking_knowledge
-        #    适度的分数补偿 (1.4x), 菜谱文档保持不变 (1.0x)。
-        max_dual_score = max(
-            (d.metadata.get("relevance_score", 0.0) for d in dual_docs), default=0.0)
-        ck_boost = 1.0 if max_dual_score > 0.8 else 1.4
-        for doc in all_candidates:
-            if doc.metadata.get("doc_type") == "cooking_knowledge":
-                doc.metadata["final_score"] = doc.metadata["final_score"] * ck_boost
 
         # 6. 去重 + 按 final_score 降序排序
         seen_doc_ids = set()
@@ -607,7 +633,7 @@ class HybridRetrievalModule:
 
         final_docs = merged_docs[:top_k]
 
-        logger.info(f"三路融合：从共{len(all_candidates)}个候选合并为{len(final_docs)}个文档"
+        logger.info(f"三路融合 (归一化后): {len(all_candidates)}候选 → {len(final_docs)}结果"
                     f" (dual:{len(dual_docs)} vec:{len(vector_docs)} bm25:{len(bm25_docs)})")
         return final_docs
         

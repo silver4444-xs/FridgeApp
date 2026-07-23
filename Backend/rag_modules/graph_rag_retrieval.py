@@ -78,12 +78,14 @@ class GraphRAGRetrieval:
         """初始化图RAG检索系统"""
         logger.info("初始化图RAG检索系统...")
         
-        # 连接Neo4j
+        # 连接Neo4j（使用共享驱动单例）
         try:
-            self.driver = GraphDatabase.driver(
+            from .neo4j_client import Neo4jClient
+            self.driver = Neo4jClient.get_driver(
                 self.config.neo4j_uri,
-                auth=(self.config.neo4j_user, self.config.neo4j_password),
-                database=self.config.neo4j_database
+                self.config.neo4j_user,
+                self.config.neo4j_password,
+                self.config.neo4j_database,
             )
             # 测试连接
             with self.driver.session() as session:

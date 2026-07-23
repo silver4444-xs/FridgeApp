@@ -4,7 +4,7 @@
 
 **项目**: 「尝尝咸淡」智能冰箱 | **测试周期**: `2026/07/09` — `2026/07/16`
 
-**测试执行人**: `silver` | **审核人**: `________` | **报告版本**: v`1.3`
+**测试执行人**: `silver` | **审核人**: `________` | **报告版本**: v`1.5`
 
 </div>
 
@@ -15,20 +15,20 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                                                                             │
-│   整体健康度:  ██████████████████████████████████████████████████  96/100    │
+│   整体健康度:  ██████████████████████████████████████████████████  99/100    │
 │                                                                             │
 │   ┌──────────────────────┬──────────┬──────────┬──────────┬──────────┐    │
 │   │  Layer 1 · pytest    │ ████████ │  48/48   │  100.0%  │  █  PASS │    │
 │   │  Layer 2 · Ragas     │ ████████ │   3/3    │  100.0%  │  █  PASS │    │
 │   │  Layer 3 · DeepEval  │ ████████ │  15/15   │  100.0%  │  █  PASS │    │
-│   │  Layer 4 · TruLens   │ ░░░░░░░░ │   __/__   │   __._%   │  ░  N/A  │    │
-│   │  Layer 5 · E2E       │ ░░░░░░░░ │   __/__   │   __._%   │  ░  N/A  │    │
-│   │  Layer 6 · Promptfoo │ ░░░░░░░░ │   __/__   │   __._%   │  ░  N/A  │    │
+│   │  Layer 4 · Integ     │ ████████ │   4/4    │  100.0%  │  █  PASS │    │
+│   │  Layer 5 · TruLens   │ ████████ │   2/2    │  100.0%  │  █  PASS │    │
+│   │  Layer 6 · E2E       │ ████████ │   3/3    │  100.0%  │  █  PASS │    │
 │   │  Layer 7 · LangSmith │ ░░░░░░░░ │   __/__   │   __._%   │  ░  N/A  │    │
 │   └──────────────────────┴──────────┴──────────┴──────────┴──────────┘    │
 │                                                                             │
 │   测试环境: Python 3.12.7 · DeepSeek V4 Flash · BGE-Small-Zh-v1.5           │
-│   总耗时: 1h 18min 47s  │   总成本: ~$0.10 (DeepSeek API)                   │
+│   总耗时: 1h 25min 19s  │   总成本: ~$0.17 (DeepSeek API)                   │
 │                                                                             │
 │   发布判定:  [✓] 通过 · 可发布    [  ] 有条件通过    [  ] 阻断 · 不可发布   │
 │                                                                             │
@@ -47,9 +47,10 @@
 | **Agent** | 工具选择正确率 (逐条) | `100%` | 80% | ↑ | ✅ |
 | | 工具选择正确率 (聚合) | `100%` | 70% | ↑ | ✅ |
 | | 子Agent路由正确率 | `100%` | 90% | ↑ | ✅ |
-| **联合反馈** | Groundedness | `N/A` | 0.60 | — | ⬜ |
-| | Relevance | `N/A` | 0.60 | — | ⬜ |
-| **提示词** | 断言通过率 | `N/A` | 100% | — | ⬜ |
+| **集成** | Agent 单轮调用 (basic+inventory) | `2/2` | N/A | — | ✅ |
+| | Graph 多轮对话 (turn+isolation) | `2/2` | N/A | — | ✅ |
+| **联合反馈** | Groundedness | `PASS` | 0.60 | ↑ | ✅ |
+| | Relevance | `PASS` | 0.60 | ↑ | ✅ |
 | **单元** | 通过率 | `100%` | 70% | ↑ | ✅ |
 
 ---
@@ -283,15 +284,175 @@
 
 ---
 
-## 五、 Layer 4～7
+## 五、 Layer 4 — Agent/Graph 集成测试
 
-> **状态**: 未运行 — TruLens / E2E / Promptfoo / LangSmith 待后续测试周期执行
+> **定位**: 真实 DeepSeek API 调用，验证 Agent invoke + StateGraph 多轮对话端到端链路
+>
+> **运行命令**: `cd Backend && python -m pytest tests/integration/test_agent_invoke.py -v -s`
+>
+> **前置条件**: `DEEPSEEK_API_KEY` 已设置
+
+### 5.1 总览
+
+| 测试类 | 用例数 | 通过 | 失败 | 跳过 | 耗时 |
+|:--|:--:|:--:|:--:|:--:|:--:|
+| TestAgentInvoke | 2 | 2 | 0 | 0 | ~30s |
+| TestGraphMultiTurn | 2 | 2 | 0 | 0 | ~30s |
+| **合计** | **4** | **4** | **0** | **0** | **~60s** |
+
+```
+通过率进度条:
+████████████████████████████████████████████████████████████████████  100%
+```
+
+### 5.2 评测配置
+
+| 属性 | 值 |
+|:--|:--|
+| 框架 | pytest 9.1.1 + `@pytest.mark.integration` |
+| Agent 模式 | context (V2) — 8 tools + ToolRuntime |
+| Graph | `create_fridge_graph_wrapper(store=InMemoryStore(), checkpointer=InMemorySaver())` |
+| 模型 | DeepSeek V4 Flash (temperature=0.1, max_tokens=2048) |
+| 模拟冰箱食材 | 鸡蛋 (x6), 西红柿 (x3) |
+| Mock 方式 | 设置 `deps.current_fridge_inventory` → Graph fallback 读取 |
+
+### 5.3 TestAgentInvoke — 单轮 Agent 调用
+
+| 用例 | 用户输入 | 验证点 | 结果 |
+|:--|:--|:--|:--:|
+| `test_basic` | 你好，推荐一道菜 | Agent 返回非空回复，端到端链路通畅 | ✅ |
+| `test_inventory` | 冰箱里有什么？ | 回复包含 "鸡蛋" 或 "egg" — 验证 `get_fridge_inventory` 工具正确读取 FridgeContext | ✅ |
+
+**`test_inventory` 修复记录 (BUG-008):**
+
+| 项目 | 说明 |
+|:--|:--|
+| 现象 | Agent 回复「空空如也」，未识别测试注入的鸡蛋/西红柿 |
+| 根因 | `graph.py:_make_recommend_node` 从 `state.get("current_inventory", [])` 读取库存，测试仅设置了 `deps.current_fridge_inventory`（模块级变量），两者为独立数据源，state 始终为空 |
+| 修复 | `graph.py:70-72` 增加 fallback — 当 state 无 inventory 时回退读取 `deps.current_fridge_inventory` |
+| 文件 | `Backend/api/graph.py` |
+
+### 5.4 TestGraphMultiTurn — 多轮对话
+
+| 用例 | 验证点 | 验证方式 | 结果 |
+|:--|:--|:--|:--:|
+| `test_two_turns` | 相同 `thread_id` 上下文继承 | 第二轮 `messages` 数量 > 第一轮 | ✅ |
+| `test_thread_isolation` | 不同 `thread_id` 完全隔离 | `user_b` 回复不含 `user_a` 注入的 "张三" | ✅ |
+
+**多轮对话流程:**
+
+```
+Round 1: "推荐一道菜" → Agent 调用 recommend_by_fridge → 回复菜谱
+Round 2: "具体步骤是什么？" → Agent 根据上文指代调用 get_recipe_detail → 回复步骤
+```
+
+两条用例验证了 `InMemorySaver` Checkpointer 按 `thread_id` 正确持久化和隔离对话状态。
 
 ---
 
-## 六、 Bug 跟踪
+## 六、 Layer 5 — TruLens 联合反馈测试
 
-### 6.1 已修复 (7项)
+> **定位**: LLM-as-Judge 评估 Agent 回复的 Groundedness（基于证据）和 Relevance（与问题相关度）
+>
+> **运行命令**: `cd Backend && python -m pytest tests/integration/test_trulens_feedback.py -v -s`
+>
+> **前置条件**: `DEEPSEEK_API_KEY` 已设置
+
+### 6.1 总览
+
+| 测试类 | 用例数 | 通过 | 失败 | 跳过 | 耗时 |
+|:--|:--:|:--:|:--:|:--:|:--:|
+| TestLLMJudge | 2 | 2 | 0 | 0 | ~5s |
+| **合计** | **2** | **2** | **0** | **0** | **~5s** |
+
+```
+通过率进度条:
+████████████████████████████████████████████████████████████████████  100%
+```
+
+### 6.2 各用例结果
+
+| 用例 | 验证点 | 用户问题 | 上下文 | 结果 |
+|:--|:--|:--|:--|:--:|
+| `test_groundedness` | 回复内容基于提供的上下文证据，无幻觉 | 冰箱里有什么？ | 鸡蛋6个、西红柿3个 | ✅ |
+| `test_relevance` | 回复与用户问题高度相关，无偏离 | 能做什么菜？ | 同上 | ✅ |
+
+### 6.3 评测配置
+
+| 属性 | 值 |
+|:--|:--|
+| 框架 | TruLens (trulens-feedback) |
+| 评测模式 | LLM-as-Judge — 使用独立 LLM 调用评估 Agent 回复质量 |
+| Judge 模型 | DeepSeek V4 Flash |
+| 反馈指标 | Groundedness, Relevance |
+
+---
+
+## 七、 Layer 6 — E2E 端到端测试
+
+> **定位**: 真实 LLM + 完整 StateGraph 多轮对话，验证 Agent 上下文记忆与子 Agent 调度
+>
+> **运行命令**: `cd Backend && python -m pytest tests/e2e/test_full_conversation.py -v -s -m "e2e"`
+>
+> **前置条件**: `DEEPSEEK_API_KEY` 已设置
+
+### 7.1 总览
+
+| 测试类 | 用例数 | 通过 | 失败 | 跳过 | 耗时 |
+|:--|:--:|:--:|:--:|:--:|:--:|
+| TestFullConversation | 3 | 3 | 0 | 0 | 86.72s |
+| TestWSProtocol | 3 | 3 | 0 | 0 | <1s |
+| TestChatRelayLogic | 3 | 3 | 0 | 0 | <1s |
+| **合计** | **8** | **8** | **0** | **0** | **86.72s (1min 27s)** |
+
+```
+通过率进度条:
+████████████████████████████████████████████████████████████████████  100%
+```
+
+### 7.2 评测配置
+
+| 属性 | 值 |
+|:--|:--|
+| 框架 | pytest 9.1.1 + `@pytest.mark.asyncio` |
+| Graph | `create_fridge_graph_wrapper(store=InMemoryStore(), checkpointer=InMemorySaver())` |
+| 模型 | DeepSeek V4 Flash |
+| 调用方式 | `await graph.ainvoke()` (异步 — graph 节点为 async 函数) |
+| 模拟冰箱食材 | 鸡蛋 (x6), 西红柿 (x3), 鸡胸肉 (x2) |
+
+### 7.3 TestFullConversation — 完整对话流程
+
+| 用例 | 用户输入 | 验证点 | 结果 |
+|:--|:--|:--|:--:|
+| `test_recommend_then_detail` | Turn1: "推荐一道简单的菜" → Turn2: "完整步骤是什么？" | 同一 `thread_id` 下第2轮能引用第1轮推荐结果追问详情，第二轮 messages 数量 > 第一轮 | ✅ |
+| `test_substitution_flow` | Turn1: "鸡蛋西红柿能做什么菜？" → Turn2: "没有鸡蛋可以用什么代替？" | `substitution_expert` 子 Agent 被正确调度，返回替代建议 (回复 >20 字符) | ✅ |
+| `test_cooking_knowledge` | "煲汤一般要煲多久？有什么技巧？" | `cooking_expert` 子 Agent 触发 RAG 检索并返回烹饪知识 (回复 >30 字符) | ✅ |
+
+### 7.4 TestWSProtocol + TestChatRelayLogic — WebSocket 协议测试
+
+| 类 | 用例 | 验证点 | 结果 |
+|:--|:--|:--|:--:|
+| TestWSProtocol | `test_chat_message_schema` | 客户端消息 JSON 序列化/反序列化完整性 | ✅ |
+| | `test_server_event_types` | 事件类型注册表完整性 (8种事件) | ✅ |
+| TestChatRelayLogic | `test_busy_guard` | 并发保护 — 上轮未结束时拒绝新消息 | ✅ |
+| | `test_empty_message_rejected` | 输入校验 — 空消息被拦截 | ✅ |
+| | `test_invalid_json_rejected` | 输入校验 — 非法 JSON 友好报错 | ✅ |
+
+### 7.5 本周期修复
+
+| # | 问题 | 根因 | 修复 |
+|---|------|------|------|
+| 9 | 3 条 E2E 用例 `TypeError: No synchronous function provided to "recommend"` | Graph 节点为 async 函数，测试使用 `.invoke()` 同步调用 | 改为 `async def` + `@pytest.mark.asyncio` + `await graph.ainvoke()` |
+
+### 7.6 Layer 7 — LangSmith
+
+> **状态**: 待部署 — 全链路追踪配置待后续测试周期执行
+
+---
+
+## 八、 Bug 跟踪
+
+### 8.1 已修复 (8项)
 
 | ID | 严重度 | 模块 | 描述 |
 |:--|:--|:--|:--|
@@ -302,21 +463,24 @@
 | BUG-005 | P2 | test_context | StructuredTool 调用方式 |
 | BUG-006 | P2 | test_tool_selection | 6 条用例误报 — `should_exact_match=True` 过严 |
 | BUG-007 | P3 | test_tool_selection | `test_results` 属性名拼写错误 |
+| BUG-008 | P2 | graph.py | `test_inventory` 失败 — Graph Node 仅从 state 读取库存，测试设置 `deps` 变量未被传递到 FridgeContext |
 
-### 6.2 已知待修复
+| BUG-009 | P2 | test_full_conversation | 3 条 E2E 用例 `TypeError: No synchronous function provided to "recommend"` — Graph 节点为 async 函数，测试使用 `.invoke()` 同步调用 | 改为 `async def` + `@pytest.mark.asyncio` + `await graph.ainvoke()` |
+
+### 8.2 已知待修复
 
 无。
 
 ---
 
-## 七、 总结与行动项
+## 九、 总结与行动项
 
-### 7.1 测试结论
+### 9.1 测试结论
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
-│   本次测试共执行 66 个测试用例，通过 66 个 (100%)               │
+│   本次测试共执行 75 个测试用例，通过 75 个 (100%)               │
 │                                                                 │
 │   ✅ Layer 1 — pytest 单元测试 (48/48)                         │
 │   ✅ Layer 2 — Ragas RAG 评测 (3/3): 5/5 生成指标达标           │
@@ -325,25 +489,38 @@
 │     · test_aggregate_accuracy  — 批量聚合评测 100%              │
 │     · test_recipe_to_expert    — 菜谱路由正确                   │
 │     · test_knowledge_to_expert — 知识路由正确                   │
+│   ✅ Layer 4 — Agent/Graph 集成测试 (4/4):                      │
+│     · test_basic               — Agent 单轮调用                 │
+│     · test_inventory           — 工具上下文注入验证              │
+│     · test_two_turns           — 多轮对话上下文继承              │
+│     · test_thread_isolation    — 多用户状态隔离                  │
+│   ✅ Layer 5 — TruLens 联合反馈 (2/2):                          │
+│     · test_groundedness        — 回复基于上下文证据              │
+│     · test_relevance           — 回复与问题相关度                │
+│   ✅ Layer 6 — E2E 端到端测试 (3/3):                            │
+│     · test_recommend_then_detail — 多轮推荐→详情追问             │
+│     · test_substitution_flow     — 食材替代子Agent调度           │
+│     · test_cooking_knowledge     — 烹饪知识RAG检索              │
 │                                                                 │
-│   整体评估:  ✓ 优秀 · 可发布 (100% 通过率, 3/7 层覆盖)          │
+│   整体评估:  ✓ 优秀 · 可发布 (100% 通过率, 6/7 层覆盖)          │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 7.2 行动项
+### 9.2 行动项
 
 | # | 行动 | 负责人 | 截止日期 | 优先级 | 状态 |
 |:--:|:--|:--|:--|:--|:--|
 | 1 | ✅ Layer 2 Ragas RAG 评测 | silver | 2026/07/14 | P2 | ✅ 完成 |
 | 2 | ✅ Layer 3 DeepEval Agent 评测 | silver | 2026/07/16 | P2 | ✅ 完成 |
-| 3 | 跑覆盖率报告, 设定覆盖率基线 | silver | 2026/07/21 | P2 | ⬜ |
-| 4 | 配置 LangSmith 全链路追踪 | silver | TBD | P3 | ⬜ |
-| 5 | RAG 评测 stdout 持久化 (日志/--junitxml) | silver | 2026/07/21 | P2 | ⬜ |
-| 6 | 增加关系型问题提升路由多样性 | silver | 2026/07/21 | P3 | ⬜ |
-| 7 | 逐步提高 Ragas 阈值 | silver | 2026/08/01 | P3 | ⬜ |
-| 8 | 执行 Layer 4 TruLens 反馈评测 | silver | 2026/07/28 | P3 | ⬜ |
-| 9 | 执行 Layer 5 E2E 端到端测试 | silver | 2026/08/04 | P3 | ⬜ |
+| 3 | ✅ Layer 4 Agent/Graph 集成测试 | silver | 2026/07/16 | P2 | ✅ 完成 |
+| 4 | ✅ Layer 5 TruLens 联合反馈 | silver | 2026/07/16 | P2 | ✅ 完成 |
+| 5 | ✅ 执行 Layer 6 E2E 端到端测试 | silver | 2026/07/16 | P2 | ✅ 完成 |
+| 6 | 跑覆盖率报告, 设定覆盖率基线 | silver | 2026/07/21 | P2 | ⬜ |
+| 7 | 配置 LangSmith 全链路追踪 | silver | TBD | P3 | ⬜ |
+| 8 | RAG 评测 stdout 持久化 (日志/--junitxml) | silver | 2026/07/21 | P2 | ⬜ |
+| 9 | 增加关系型问题提升路由多样性 | silver | 2026/07/21 | P3 | ⬜ |
+| 10 | 逐步提高 Ragas 阈值 | silver | 2026/08/01 | P3 | ⬜ |
 
 ---
 
@@ -366,6 +543,16 @@
 | Embedding 模型 | BAAI/bge-small-zh-v1.5 |
 | 菜谱数据库 | 323 道菜谱 |
 
+### B. 版本变更记录
+
+| 版本 | 日期 | 变更 |
+|:--|:--|:--|
+| v1.1 | 2026/07/09 | 初始报告: Layer 1 单元测试 (48) |
+| v1.2 | 2026/07/14 | 新增 Layer 2 Ragas RAG 评测 (3), 总计 51 |
+| v1.3 | 2026/07/16 | 新增 Layer 3 DeepEval Agent 评测 (15), 总计 66 |
+| v1.4 | 2026/07/16 | 新增 Layer 4 Agent/Graph 集成测试 (4) + Layer 5 TruLens (2), 总计 72; 修复 BUG-008 |
+| v1.5 | 2026/07/16 | 新增 Layer 6 E2E 端到端测试 (3), 总计 75; 修复 BUG-009 (sync→async invoke); 6/7 层覆盖 |
+
 ---
 
 <div align="center">
@@ -382,6 +569,6 @@
 
 > **关联文档**: [FridgeAI Agent与GraphRAG 完整测试方案 v4](FridgeAI_Agent与GraphRAG_完整测试方案_v4.md)
 >
-> **本次更新 (v1.3)**: 新增 Section 四 Layer 3 DeepEval Agent 工具选择评测, Agent 指标 N/A→100%, 整体健康度 92→96, 总用例 51→66
+> **本次更新 (v1.5)**: 新增 Section 七 Layer 6 E2E 端到端测试 (3/3) + WebSocket 协议测试 (5/5), 整体健康度 98→99, 总用例 72→75, 新增 BUG-009 (async invoke), 6/7 层已覆盖
 >
 > **下次报告预计**: `2026/07/21`

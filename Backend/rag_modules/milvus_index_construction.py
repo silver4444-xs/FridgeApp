@@ -223,8 +223,11 @@ class MilvusIndexConstructionModule:
             raise ValueError("文档块列表不能为空")
         
         try:
-            # 1. 创建集合（如果schema不兼容则强制重新创建）
-            if not self.create_collection(force_recreate=True):
+            # 1. 创建集合（不存在时创建；已存在则复用 — P2-4 修复）
+            need_recreate = (
+                force_recreate and self.client.has_collection(self.collection_name)
+            )
+            if not self.create_collection(force_recreate=need_recreate):
                 return False
             
             # 2. 准备数据
