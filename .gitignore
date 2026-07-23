@@ -45,12 +45,23 @@ deploy/
 # Claude Code 本地配置
 .claude/
 
-# 个人文档 (求职/面试准备)
+# 个人资料 (求职/面试/简历 — 永不上传)
+docs/简历/
+docs/面试问答/
 docs/优秀项目经历.txt
 docs/面试问题.txt
 docs/大厂Agent面试问答手册.md
 docs/FridgeAI_简历项目描述.md
 docs/_docx_extracted.txt
+
+# 中间调试 & 改进分析报告 (本地草稿, 永不上传)
+docs/FridgeAI_Agent与GraphRAG_测试报告.md
+docs/FridgeAI_项目改进分析报告.md
+docs/FridgeAI_P0改进方案_*.md
+docs/FridgeAI_P1改进方案_*.md
+docs/FridgeAI_P2改进方案_*.md
+docs/index.md
+Backend/tests/FridgeAI_Agent与GraphRAG_测试报告.md
 
 # AI 实验代码 (非项目正式代码)
 Backend/agent(代码系ai生成)/
