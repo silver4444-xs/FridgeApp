@@ -47,3 +47,15 @@ def init_agent():
     deps.fridge_checkpointer = checkpointer
 
     return agent
+
+
+@pytest.fixture(scope="module")
+def agent_graph():
+    """创建带 InMemoryStore + InMemorySaver 的 StateGraph，支持多轮对话测试。"""
+    import os
+    from langgraph.store.memory import InMemoryStore
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    os.environ.setdefault("DEEPSEEK_API_KEY", os.getenv("DEEPSEEK_API_KEY", ""))
+    from main import create_fridge_graph_wrapper
+    return create_fridge_graph_wrapper(store=InMemoryStore(), checkpointer=InMemorySaver())
