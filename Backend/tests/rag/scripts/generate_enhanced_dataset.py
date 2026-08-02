@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 import httpx
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
-from langchain.schema import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 GENERATION_SYSTEM_PROMPT = """你是一个烹饪领域评测数据生成专家。你的任务是生成 RAG 系统评测用的问题-答案对。
 
@@ -113,9 +113,45 @@ def _extract_json_objects(text: str) -> List[Dict]:
     return results
 
 
+def _try_build_recipe_db(deps) -> bool:
+    """尝试通过 RAG 系统数据模块构建菜谱数据库（用于 standalone 运行）。"""
+    try:
+        if deps.rag_system and deps.rag_system.data_module:
+            docs = deps.rag_system.data_module.documents
+            if docs:
+                from langchain_core.documents import Document
+                adapted_docs = []
+                for doc in docs:
+                    adapted_docs.append(Document(
+                        page_content=doc.page_content,
+                        metadata={
+                            "parent_id": doc.metadata.get("node_id", ""),
+                            "dish_name": doc.metadata.get("recipe_name", "未知菜品"),
+                            "category": doc.metadata.get("category", "其他"),
+                            "difficulty": doc.metadata.get("difficulty", "未知"),
+                            "source": doc.metadata.get("node_id", ""),
+                        }
+                    ))
+                deps.recipe_db.build_from_documents(adapted_docs)
+                print(f"[get_seed_data] 手动构建菜谱数据库: {len(deps.recipe_db)} 道菜谱")
+                return True
+    except Exception as e:
+        print(f"[get_seed_data] 手动构建菜谱数据库失败: {e}")
+    return False
+
+
 def get_seed_data() -> List[Dict]:
     """从菜谱数据库提取种子数据。"""
     import api.dependencies as deps
+
+    # 如果 recipe_db 为空（standalone 运行未经过 server lifespan），尝试手动构建
+    if not deps.recipe_db._recipes:
+        if not _try_build_recipe_db(deps):
+            raise RuntimeError(
+                "菜谱数据库为空！无法提取种子数据。\n"
+                "请先启动后端服务 (uvicorn api.server:app) 使 Neo4j 数据加载到内存，\n"
+                "或确保 Neo4j 可连接且已配置好环境变量后重试。")
+
     seeds = []
     for rid, recipe in deps.recipe_db._recipes.items():
         content_parts = []

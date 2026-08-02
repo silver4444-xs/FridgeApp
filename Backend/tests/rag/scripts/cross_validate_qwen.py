@@ -12,7 +12,7 @@ from typing import List, Dict, Tuple
 
 import httpx
 from langchain.chat_models import init_chat_model
-from langchain.schema import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 CROSS_VALIDATION_SYSTEM_PROMPT = """你是一个评测数据质量审核专家。你需要对 RAG 评测数据条目进行质量评分。
 
