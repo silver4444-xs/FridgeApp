@@ -32,6 +32,24 @@ def load_golden_dataset() -> Dataset:
         return Dataset.from_list(json.load(f))
 
 
+def load_enhanced_dataset() -> Dataset:
+    """
+    从 JSON 文件加载 AI 增强评测数据集, 转为 HuggingFace Dataset 格式。
+
+    数据集包含 100+ 条经过质控流水线的中文烹饪问答对:
+    - DeepSeek 基于菜谱种子 + 金标集 Few-shot 生成
+    - 千问交叉验证 (score >= 4.0)
+    - 自动质控 (覆盖检查 / 去重 / 过滤)
+
+    如果 enhanced_dataset.json 尚不存在, 返回空 Dataset, 测试将被跳过。
+    """
+    path = Path(__file__).parent / "eval_data" / "enhanced_dataset.json"
+    if not path.exists():
+        return Dataset.from_list([])
+    with open(path, encoding="utf-8") as f:
+        return Dataset.from_list(json.load(f))
+
+
 def _repair_json_output(text: str) -> str:
     """
     修复 LLM 生成的 JSON 中常见问题, 避免 ragas OutputParserException。
@@ -415,3 +433,65 @@ class TestGoldenRAG:
         assert len(set(strategies)) >= 2, (
             f"金标集路由仅触发 {len(set(strategies))} 种策略, "
             f"预期 >= 2 (hybrid_traditional/graph_rag/combined)")
+
+
+class TestEnhancedRAG:
+    """
+    AI 增强集评测 —— 用 100+ 条 AI 生成 + 质控验证的数据评估 RAG 质量。
+
+    增强集的定位:
+    - 扩大覆盖面 (100+ 条 vs 金标集 50 条)
+    - 发现金标集未覆盖的盲区
+    - 阈值比金标集宽松 0.05 (数据虽经质控但仍是 AI 辅助生成)
+
+    如果 enhanced_dataset.json 不存在则自动跳过。
+    """
+
+    @pytest.mark.rag
+    @pytest.mark.slow
+    def test_enhanced_comprehensive(self, init_rag_system):
+        """增强集综合评测: ContextPrecision/Recall/Faithfulness/Relevancy/Correctness。"""
+        from ragas.metrics import (
+            ContextPrecision, ContextRecall, Faithfulness,
+            AnswerRelevancy, AnswerCorrectness)
+        from ragas import evaluate, RunConfig
+
+        ds = load_enhanced_dataset()
+        if len(ds) == 0:
+            pytest.skip("enhanced_dataset.json 不存在 — 运行 generate_enhanced_dataset.py 生成")
+
+        results = [run_rag_query(q) for q in ds["question"]]
+        ds = ds.add_column("response", [r["answer"] for r in results])
+        ds = ds.add_column("retrieved_contexts", [r["contexts"] for r in results])
+        ds = ds.rename_column("question", "user_input")
+        ds = ds.rename_column("ground_truth", "reference")
+
+        score = evaluate(
+            ds,
+            metrics=[ContextPrecision(), ContextRecall(), Faithfulness(),
+                     AnswerRelevancy(strictness=1), AnswerCorrectness()],
+            llm=get_eval_llm(), embeddings=get_eval_embeddings(),
+            run_config=RunConfig(max_wait=180, max_retries=3, max_workers=8))
+
+        thresholds = {
+            "context_precision": 0.50, "context_recall": 0.40,
+            "faithfulness": 0.60, "answer_relevancy": 0.50,
+            "answer_correctness": 0.50,
+        }
+
+        print("\n" + "=" * 60)
+        print("  Enhanced RAG 增强集评测 (Ragas)")
+        print("=" * 60)
+        passed = 0
+        for m in thresholds:
+            v_list = score[m]
+            valid = [v for v in v_list if v is not None and v == v]
+            v = sum(valid) / len(valid) if valid else 0.0
+            ok = v >= thresholds.get(m, 0)
+            flag = "✓" if ok else "✗"
+            print(f"  {flag} {m:<25s}: {v:.4f}")
+            if ok:
+                passed += 1
+        print("=" * 60)
+        print(f"  Enhanced 通过: {passed}/{len(thresholds)}")
+        assert passed >= 4, f"增强集仅 {passed}/{len(thresholds)} 项达标"
