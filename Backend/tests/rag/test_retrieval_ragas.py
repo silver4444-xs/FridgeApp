@@ -167,9 +167,19 @@ def get_eval_llm():
         temperature=0.0, max_tokens=4096,
         openai_api_key=os.getenv("EVAL_API_KEY"),
         openai_api_base=os.getenv("EVAL_API_BASE", "https://api.deepseek.com/v1"),
-        http_client=httpx.Client(timeout=httpx.Timeout(connect=10, read=600, write=10, pool=10)))
+        http_client=httpx.Client(timeout=httpx.Timeout(connect=10, read=600, write=10, pool=10)),
+        # 禁用 DeepSeek 思考模式: 评测需快速返回纯 JSON, thinking 拖慢响应并触发 Ragas 超时
+        # langchain-openai>=1.0 须顶层显式传 extra_body; 塞进 model_kwargs 会被展开到请求顶层而失效
+        extra_body={"thinking": {"type": "disabled"}},
+    )
     safe_llm = _JsonPromptInjectionMixin(base_llm)
     return LangchainLLMWrapper(safe_llm, bypass_n=True)
+
+
+def _eval_run_config():
+    """评测 RunConfig: 禁用思考后 DeepSeek 秒回, 并发 8→4 缓解限流, 减少超时重试浪费。"""
+    from ragas import RunConfig
+    return RunConfig(max_wait=240, max_retries=2, max_workers=4)
 
 
 def get_eval_embeddings():
@@ -253,7 +263,7 @@ class TestRAGRetrieval:
         score = evaluate(
             ds, metrics=[ContextPrecision()],
             llm=get_eval_llm(), embeddings=get_eval_embeddings(),
-            run_config=RunConfig(max_wait=180, max_retries=3, max_workers=8))
+            run_config=_eval_run_config())
         cp_list = score["context_precision"]
         valid = [v for v in cp_list if v is not None and v == v]
         zeros = sum(1 for v in valid if v == 0.0)
@@ -324,7 +334,7 @@ class TestRAGGeneration:
             metrics=[ContextPrecision(), ContextRecall(), Faithfulness(),
                      AnswerRelevancy(strictness=1), AnswerCorrectness()],
             llm=get_eval_llm(), embeddings=get_eval_embeddings(),
-            run_config=RunConfig(max_wait=180, max_retries=3, max_workers=8))
+            run_config=_eval_run_config())
 
         thresholds = {
             "context_precision": 0.50, "context_recall": 0.40,
@@ -394,7 +404,7 @@ class TestGoldenRAG:
             metrics=[ContextPrecision(), ContextRecall(), Faithfulness(),
                      AnswerRelevancy(strictness=1), AnswerCorrectness()],
             llm=get_eval_llm(), embeddings=get_eval_embeddings(),
-            run_config=RunConfig(max_wait=180, max_retries=3, max_workers=8))
+            run_config=_eval_run_config())
 
         thresholds = {
             "context_precision": 0.55, "context_recall": 0.45,
@@ -471,7 +481,7 @@ class TestEnhancedRAG:
             metrics=[ContextPrecision(), ContextRecall(), Faithfulness(),
                      AnswerRelevancy(strictness=1), AnswerCorrectness()],
             llm=get_eval_llm(), embeddings=get_eval_embeddings(),
-            run_config=RunConfig(max_wait=180, max_retries=3, max_workers=8))
+            run_config=_eval_run_config())
 
         thresholds = {
             "context_precision": 0.50, "context_recall": 0.40,

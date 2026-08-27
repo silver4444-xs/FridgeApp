@@ -21,12 +21,46 @@ import pytest
 from pathlib import Path
 from typing import List, Dict
 
+# BUG-011: TurnFaithfulness 评测每个窗口需多次 LLM 调用 (truths/claims/verdicts/reason)，
+# 默认 88.5s/attempt 在 DeepSeek 推理模型上易超时；上调到 300s 作为安全余量。
+os.environ["DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"] = "300"
+
 
 def load_conversation_scenarios() -> List[Dict]:
     """加载多轮对话场景数据集 (18 条)。"""
     path = Path(__file__).parent / "eval_data" / "conversation_scenarios.json"
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def _summarize_tool_message(content: str, max_chars: int = 800) -> str:
+    """
+    从 ToolMessage 内容提取简洁的忠实度评测上下文。
+
+    原始 ToolResponse JSON 含完整菜谱 steps/tips，体量过大。作为 TurnFaithfulness
+    的 retrieval_context 时，会撑大 truths/verdicts 的 LLM 输出，触发 DeepSeek
+    max_tokens 截断 → 非法 JSON。这里只保留 message 摘要 + 截断后的 data
+    (steps 仅保留前 3 条)，将每条上下文控制在 max_chars 以内。
+    """
+    if isinstance(content, str):
+        raw = content
+    else:
+        raw = str(content)
+    try:
+        obj = json.loads(raw)
+    except Exception:
+        return raw[:max_chars]
+    if not isinstance(obj, dict):
+        return raw[:max_chars]
+
+    message = obj.get("message") or ""
+    data = obj.get("data")
+    if isinstance(data, dict) and isinstance(data.get("steps"), list):
+        # 步骤列表最长，仅保留前 3 条即可支撑忠实度判断
+        data = {**data, "steps": data["steps"][:3]}
+    data_str = json.dumps(data, ensure_ascii=False) if data is not None else ""
+    summary = f"{message}\n{data_str}".strip()
+    return summary[:max_chars]
 
 
 def run_multi_turn_agent(turns: List[str], thread_id: str = None) -> Dict:
@@ -43,6 +77,7 @@ def run_multi_turn_agent(turns: List[str], thread_id: str = None) -> Dict:
     """
     import api.dependencies as deps
     from api.tools import FridgeContext
+    from langchain_core.messages import ToolMessage
 
     if not deps.fridge_agent:
         pytest.skip("Agent not initialized")
@@ -75,8 +110,13 @@ def run_multi_turn_agent(turns: List[str], thread_id: str = None) -> Dict:
         messages = result.get("messages", [])
         tool_calls = []
         assistant_text = ""
+        retrieval_context = []
 
         for msg in messages:
+            # 捕获工具返回 (ToolMessage) 作为忠实度评测的 retrieval context
+            # BUG-011 修复: 用摘要而非原始 JSON，避免撑大 truths/verdicts 输出致截断
+            if isinstance(msg, ToolMessage):
+                retrieval_context.append(_summarize_tool_message(msg.content))
             if hasattr(msg, "tool_calls") and msg.tool_calls:
                 for tc in msg.tool_calls:
                     tool_calls.append(tc.get("name", "unknown"))
@@ -87,6 +127,7 @@ def run_multi_turn_agent(turns: List[str], thread_id: str = None) -> Dict:
             "user": user_msg,
             "assistant": assistant_text,
             "tool_calls": tool_calls,
+            "retrieval_context": retrieval_context,
         })
 
     return {"turns": turn_results, "final_answer": turn_results[-1]["assistant"] if turn_results else ""}
@@ -97,13 +138,18 @@ def _make_conversational_turns(turn_results: List[Dict]) -> list:
     将 run_multi_turn_agent 返回的 turn_results 转换为 DeepEval Turn 列表。
 
     DeepEval 4.0.7 的 Turn 使用 role/content 字段，按 user/assistant 交替排列。
+    每个 assistant turn 附带 retrieval_context (该轮工具返回)，供 TurnFaithfulness 评测。
     """
     from deepeval.test_case.conversational_test_case import Turn
 
     turns = []
     for tr in turn_results:
         turns.append(Turn(role="user", content=tr["user"]))
-        turns.append(Turn(role="assistant", content=tr["assistant"]))
+        turns.append(Turn(
+            role="assistant",
+            content=tr["assistant"],
+            retrieval_context=tr.get("retrieval_context") or None,
+        ))
     return turns
 
 
@@ -120,6 +166,8 @@ def _build_eval_model():
         api_key=api_key,
         base_url=os.getenv("EVAL_API_BASE", "https://api.deepseek.com/v1"),
         temperature=0.0,
+        # 关闭 DeepSeek 推理思考，避免评测 LLM 因长链式思考拖慢/超时 (见 RAG 层同款处理)
+        generation_kwargs={"extra_body": {"thinking": {"type": "disabled"}}},
     )
 
 
@@ -233,7 +281,10 @@ class TestAgentFaithfulness:
             conv_case = ConversationalTestCase(turns=turns, scenario=tc["scenario"])
 
             metric = TurnFaithfulnessMetric(
-                model=eval_model, threshold=0.7, include_reason=True, async_mode=False)
+                model=eval_model, threshold=0.7, include_reason=True,
+                async_mode=False,
+                # 限制每窗口提取的 truths 数量，避免 verdicts 输出超长被 DeepSeek 截断
+                truths_extraction_limit=8)
             metric.measure(conv_case)
 
             print(f"\n  {tc['scenario']}: Faithfulness={metric.score:.2f} reason={metric.reason}")
