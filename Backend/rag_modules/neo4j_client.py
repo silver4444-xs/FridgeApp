@@ -7,6 +7,8 @@ graph_data_preparation、hybrid_retrieval、graph_rag_retrieval 统一使用此�
 import logging
 from neo4j import GraphDatabase
 
+from config import reliability_config
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,6 +31,10 @@ class Neo4jClient:
         if cls._driver is None:
             cls._driver = GraphDatabase.driver(
                 uri, auth=(user, password), database=database,
+                # Phase 2: 连接池上限 + 超时，防止连接耗尽 / 挂起（见 config.ReliabilityConfig）
+                max_connection_pool_size=reliability_config.neo4j_max_connection_pool_size,
+                connection_timeout=reliability_config.neo4j_connection_timeout,
+                max_connection_lifetime=reliability_config.neo4j_max_connection_lifetime,
             )
             try:
                 with cls._driver.session() as session:

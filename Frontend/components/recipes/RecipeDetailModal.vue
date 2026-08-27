@@ -6,8 +6,13 @@
 			<view class="modal-header">
 				<view class="modal-title-row">
 					<text class="modal-name">{{ recipe.name }}</text>
-					<view v-if="!recipe.ownedIngredients || recipe.ownedIngredients.length > 0" class="match-badge-v" :class="matchLevel">
-						<text>{{ recipe.matchCount }}/{{ recipe.ingredients.length }} 种食材</text>
+					<view class="modal-title-actions">
+						<view class="modal-fav-btn" :class="{ active: store.isFavorite(recipe.id) }" @click="store.toggleFavorite(recipe.id)">
+							<text class="material-icons">{{ store.isFavorite(recipe.id) ? 'favorite' : 'favorite_border' }}</text>
+						</view>
+						<view v-if="!recipe.ownedIngredients || recipe.ownedIngredients.length > 0" class="match-badge-v" :class="matchLevel">
+							<text>{{ recipe.matchCount }}/{{ recipe.ingredients.length }} 种食材</text>
+						</view>
 					</view>
 				</view>
 				<view class="modal-meta">
@@ -43,6 +48,8 @@
 </template>
 
 <script>
+import { store } from '@/utils/store.js'
+
 export default {
 	name: 'RecipeDetailModal',
 	props: {
@@ -51,6 +58,7 @@ export default {
 	},
 	emits: ['close'],
 	computed: {
+		store() { return store },
 		matchLevel() {
 			if (!this.recipe) return ''
 			const r = this.recipe.matchCount / Math.max(this.recipe.ingredients.length, 1)
@@ -111,6 +119,35 @@ export default {
 	font-weight: 900;
 	color: #e0e0e0;
 	flex: 1;
+}
+
+.modal-title-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
+}
+
+.modal-fav-btn {
+	width: 36px;
+	height: 36px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.06);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 0.2s ease;
+}
+.modal-fav-btn .material-icons {
+	font-size: 20px !important;
+	color: rgba(255, 255, 255, 0.5);
+}
+.modal-fav-btn.active .material-icons {
+	color: #ef4444;
+}
+.modal-fav-btn:active {
+	transform: scale(1.15);
 }
 
 .match-badge-v {

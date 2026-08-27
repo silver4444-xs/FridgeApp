@@ -1,0 +1,132 @@
+[
+  {
+    "scenario": "推荐后追问做法",
+    "turns": ["推荐几道家常菜", "第一道菜的具体步骤是什么？"],
+    "expected_intents": ["recommend", "recipe_detail"],
+    "difficulty": "easy",
+    "category": "recommend_then_detail"
+  },
+  {
+    "scenario": "指定食材推荐后追问",
+    "turns": ["鸡蛋和西红柿能做什么菜？", "番茄炒蛋的具体做法？"],
+    "expected_intents": ["recommend", "recipe_detail"],
+    "difficulty": "easy",
+    "category": "recommend_then_detail"
+  },
+  {
+    "scenario": "冰箱推荐后追问做法",
+    "turns": ["能做什么菜？", "第二个菜怎么做？"],
+    "expected_intents": ["recommend", "recipe_detail"],
+    "difficulty": "medium",
+    "category": "recommend_then_detail"
+  },
+  {
+    "scenario": "查看冰箱后推荐",
+    "turns": ["冰箱里有什么？", "用这些食材能做什么？"],
+    "expected_intents": ["inventory", "recommend"],
+    "difficulty": "easy",
+    "category": "recommend_then_detail"
+  },
+  {
+    "scenario": "缺食材找替代",
+    "turns": ["鸡蛋西红柿能做什么？", "没有鸡蛋可以用什么代替？"],
+    "expected_intents": ["recommend", "substitution"],
+    "difficulty": "medium",
+    "category": "substitution_flow"
+  },
+  {
+    "scenario": "直接询问替代",
+    "turns": ["做红烧肉没有冰糖了", "白糖能代替冰糖吗？用量一样吗？"],
+    "expected_intents": ["substitution", "substitution"],
+    "difficulty": "medium",
+    "category": "substitution_flow"
+  },
+  {
+    "scenario": "连续两种食材替代",
+    "turns": ["家里没有料酒了怎么办？", "那没有老抽呢？"],
+    "expected_intents": ["substitution", "substitution"],
+    "difficulty": "hard",
+    "category": "substitution_flow"
+  },
+  {
+    "scenario": "缺食材推荐替代菜谱",
+    "turns": ["我想做宫保鸡丁但缺花生", "那没有花生能做什么类似的菜？"],
+    "expected_intents": ["substitution", "recommend"],
+    "difficulty": "medium",
+    "category": "substitution_flow"
+  },
+  {
+    "scenario": "记住忌口并应用",
+    "turns": ["我不吃花生，对海鲜过敏", "推荐几个菜"],
+    "expected_intents": ["save_preferences", "recommend"],
+    "expected_knowledge_retained": ["忌口花生", "忌口海鲜"],
+    "difficulty": "medium",
+    "category": "preference_memory"
+  },
+  {
+    "scenario": "记住菜系偏好",
+    "turns": ["我喜欢川菜，口味偏辣", "推荐几道菜"],
+    "expected_intents": ["save_preferences", "recommend"],
+    "expected_knowledge_retained": ["偏好川菜", "喜欢辣"],
+    "difficulty": "medium",
+    "category": "preference_memory"
+  },
+  {
+    "scenario": "记住人数偏好",
+    "turns": ["我们3个人吃饭", "推荐适合的菜"],
+    "expected_intents": ["save_preferences", "recommend"],
+    "expected_knowledge_retained": ["3人份"],
+    "difficulty": "easy",
+    "category": "preference_memory"
+  },
+  {
+    "scenario": "组合偏好记忆",
+    "turns": ["我不吃香菜，喜欢清淡口味，2个人", "有什么推荐？"],
+    "expected_intents": ["save_preferences", "recommend"],
+    "expected_knowledge_retained": ["忌口香菜", "清淡", "2人份"],
+    "difficulty": "hard",
+    "category": "preference_memory"
+  },
+  {
+    "scenario": "烹饪知识追问细节",
+    "turns": ["煎鱼怎么不粘锅？", "那用什么油比较好？"],
+    "expected_intents": ["cooking_knowledge", "cooking_knowledge"],
+    "difficulty": "medium",
+    "category": "knowledge_followup"
+  },
+  {
+    "scenario": "烹饪技巧应用到菜谱",
+    "turns": ["怎么让鸡肉更嫩？", "用这个方法做宫保鸡丁可以吗？"],
+    "expected_intents": ["cooking_knowledge", "recipe_detail"],
+    "difficulty": "medium",
+    "category": "knowledge_followup"
+  },
+  {
+    "scenario": "食材知识追问",
+    "turns": ["猪肉不同部位有什么区别？", "里脊肉除了糖醋还能做什么？"],
+    "expected_intents": ["cooking_knowledge", "recommend"],
+    "difficulty": "medium",
+    "category": "knowledge_followup"
+  },
+  {
+    "scenario": "新手入门追问",
+    "turns": ["新手学做菜从什么开始？", "番茄炒蛋的具体步骤是什么？"],
+    "expected_intents": ["cooking_knowledge", "recipe_detail"],
+    "difficulty": "easy",
+    "category": "knowledge_followup"
+  },
+  {
+    "scenario": "频繁切换话题",
+    "turns": ["推荐一道菜", "煲汤要多久？", "鸡蛋怎么保存？", "刚才推荐的菜怎么做？"],
+    "expected_intents": ["recommend", "cooking_knowledge", "cooking_knowledge", "recipe_detail"],
+    "difficulty": "hard",
+    "category": "edge_case"
+  },
+  {
+    "scenario": "超出知识库范围",
+    "turns": ["怎么做分子料理？", "有哪些米其林三星中餐厅？"],
+    "expected_intents": ["cooking_knowledge", "cooking_knowledge"],
+    "difficulty": "hard",
+    "category": "edge_case"
+  }
+]

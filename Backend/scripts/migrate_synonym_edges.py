@@ -47,5 +47,10 @@ if __name__ == "__main__":
     import os
     uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
     user = os.getenv("NEO4J_USER", "neo4j")
-    pwd = os.getenv("NEO4J_PASSWORD", "all-in-rag")
+    pwd = os.getenv("NEO4J_PASSWORD")
+    if not pwd:
+        raise SystemExit(
+            "环境变量 NEO4J_PASSWORD 未设置。\n"
+            "请复制 .env.example 为 .env 并填入真实凭证, 或在 shell 中导出该变量。"
+        )
     migrate(uri, user, pwd)

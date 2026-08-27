@@ -8,7 +8,6 @@ import json
 import logging
 import re
 from typing import List, Dict, Tuple, Any
-from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
 from langchain_core.documents import Document
@@ -20,8 +19,7 @@ from prompts.keyword_extraction import EXTRACT_QUERY_KEYWORDS
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class RetrievalResult:
+class RetrievalResult(BaseModel):
     """检索结果数据结构"""
     content: str
     node_id: str
@@ -621,15 +619,27 @@ class HybridRetrievalModule:
             doc.metadata["final_score"] = doc.metadata.get("norm_score", 0.0) * 0.3
             all_candidates.append(doc)
 
-        # 6. 去重 + 按 final_score 降序排序
-        seen_doc_ids = set()
-        merged_docs = []
-        for doc in sorted(all_candidates, key=lambda d: d.metadata["final_score"], reverse=True):
+        # 6. 去重 + 累加多路命中分数 (P0 修复: 同一文档多路命中是强信号, 应累加而非取单路 max)
+        #    旧实现按 final_score 降序取首个(即 max)去重, 导致向量路(0.5权重)压制 BM25 精确菜名匹配(0.3)
+        score_map: Dict[str, float] = {}
+        doc_map: Dict[str, Document] = {}
+        method_map: Dict[str, List[str]] = {}
+        for doc in all_candidates:
             doc_id = doc.metadata.get("node_id", hash(doc.page_content))
-            if doc_id not in seen_doc_ids:
-                seen_doc_ids.add(doc_id)
-                doc.metadata["merge_order"] = len(merged_docs)
-                merged_docs.append(doc)
+            if doc_id not in score_map:
+                score_map[doc_id] = 0.0
+                doc_map[doc_id] = doc
+                method_map[doc_id] = []
+            score_map[doc_id] += doc.metadata.get("final_score", 0.0)
+            method_map[doc_id].append(doc.metadata.get("search_method", "unknown"))
+
+        merged_docs = []
+        for doc_id, score in sorted(score_map.items(), key=lambda x: x[1], reverse=True):
+            doc = doc_map[doc_id]
+            doc.metadata["final_score"] = score
+            doc.metadata["search_method"] = "+".join(method_map[doc_id])
+            doc.metadata["merge_order"] = len(merged_docs)
+            merged_docs.append(doc)
 
         final_docs = merged_docs[:top_k]
 
@@ -637,6 +647,34 @@ class HybridRetrievalModule:
                     f" (dual:{len(dual_docs)} vec:{len(vector_docs)} bm25:{len(bm25_docs)})")
         return final_docs
         
+    def hybrid_search_with_rerank(self, query: str, top_k: int = 10,
+                                   enable_rerank: bool = True,
+                                   rerank_query: str = "") -> List[Document]:
+        """混合检索 + Jina Reranker 精排。
+
+        先以 top_k × 1.5 做粗排，再调用 Jina Reranker API 精排到 top_k。
+
+        Args:
+            query: 用于检索的查询 (可能是改写后的)
+            top_k: 最终返回的文档数
+            enable_rerank: 是否启用 Jina Reranker (默认 True)
+            rerank_query: 用于精排的查询 (原始用户查询, 保留原始意图)
+
+        Returns:
+            精排后的 Document 列表。
+        """
+        # 粗排: 取 top_k × 1.5 候选
+        candidate_k = max(top_k, int(top_k * 1.5))
+        candidates = self.hybrid_search(query, candidate_k)
+
+        if not enable_rerank or not candidates:
+            return candidates[:top_k]
+
+        from .reranker import rerank_with_jina
+        return rerank_with_jina(
+            rerank_query or query, candidates, top_k=top_k,
+        )
+
     def close(self):
         """关闭资源连接"""
         if self.driver:

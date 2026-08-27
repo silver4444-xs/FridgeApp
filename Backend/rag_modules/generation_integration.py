@@ -7,10 +7,13 @@ import os
 import time
 from typing import List
 
-from langchain_openai import ChatOpenAI
+import httpx
+from langchain.chat_models import init_chat_model
 from langchain_core.documents import Document
 
 from prompts.answer_generation import GENERATE_ADAPTIVE_ANSWER
+
+from config import reliability_config
 
 logger = logging.getLogger(__name__)
 
@@ -30,16 +33,23 @@ class GenerationIntegrationModule:
         if not api_key:
             raise ValueError("请设置 DEEPSEEK_API_KEY 环境变量")
 
-        # ChatOpenAI 客户端 (langchain-openai)
-        # stream_chunk_timeout: 防止流式调用因 TCP 静默断开而永久挂起 (langchain-openai>=1.2.0)
-        self.lc_client = ChatOpenAI(
-            model=self.model_name,
-            api_key=api_key,
-            base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
+        # 模型客户端 (init_chat_model, LangChain 1.x 统一入口)
+        # http_client.read=120: 防止流式调用因 TCP 静默断开而永久挂起
+        self.lc_client = init_chat_model(
+            f"openai:{self.model_name}",
             temperature=self.temperature,
             max_tokens=self.max_tokens,
-            stream_chunk_timeout=120,
-            model_kwargs={"extra_body": {"thinking": {"type": "disabled"}}},
+            openai_api_key=api_key,
+            openai_api_base=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
+            http_client=httpx.Client(
+                timeout=httpx.Timeout(
+                    connect=reliability_config.http_connect_timeout,
+                    read=reliability_config.generation_http_read_timeout,
+                    write=reliability_config.http_write_timeout,
+                    pool=reliability_config.http_pool_timeout,
+                ),
+            ),
+            extra_body={"thinking": {"type": "disabled"}},
         )
 
         logger.info(f"生成模块初始化完成，模型: {model_name}")
@@ -106,9 +116,9 @@ class GenerationIntegrationModule:
         for attempt in range(max_retries):
             try:
                 if attempt == 0:
-                    print("开始流式生成回答...\n")
+                    logger.info("开始流式生成回答...")
                 else:
-                    print(f"第{attempt + 1}次尝试流式生成...\n")
+                    logger.info(f"第{attempt + 1}次尝试流式生成...")
 
                 for chunk in self.lc_client.stream(messages):
                     yield chunk.content
@@ -120,12 +130,12 @@ class GenerationIntegrationModule:
 
                 if attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 2
-                    print(f"⚠️ 连接中断，{wait_time}秒后重试...")
+                    logger.warning(f"连接中断，{wait_time}秒后重试...")
                     time.sleep(wait_time)
                     continue
                 else:
                     logger.error(f"流式生成完全失败，尝试非流式后备方案")
-                    print("⚠️ 流式生成失败，切换到标准模式...")
+                    logger.warning("流式生成失败，切换到标准模式...")
 
                     try:
                         fallback_response = self.generate_adaptive_answer(question, documents)

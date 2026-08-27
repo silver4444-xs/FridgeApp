@@ -71,20 +71,21 @@ def init_rag_system():
     _rag.build_knowledge_base()
 
     deps.rag_system = _rag
-    print(f"[RAG Fixture] 完成, system_ready={_rag.system_ready}")
 
-    # 预缓存 RAG 查询结果，test_context_precision 和 test_comprehensive 共享
-    _cached_results = _run_all_queries()
-    _rag._cached_results = _cached_results
-    print(f"[RAG Fixture] 预缓存 {len(_cached_results)} 条查询结果")
+    # 预缓存金标集查询结果 (50 条，后续测试复用，节省 ~70min)
+    _golden_results = _run_golden_queries()
+    _rag._cached_golden_results = _golden_results
+    print(f"[RAG Fixture] 预缓存 {len(_golden_results)} 条金标集查询结果")
+
+    print(f"[RAG Fixture] 完成, system_ready={_rag.system_ready}")
     return _rag
 
 
-def _run_all_queries():
-    """并行执行所有 RAG 查询并缓存结果"""
+def _run_golden_queries():
+    """并行执行金标集所有 RAG 查询并缓存结果。"""
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    from test_retrieval_ragas import load_eval_dataset, run_rag_query
-    ds = load_eval_dataset()
+    from test_retrieval_ragas import load_golden_dataset, run_rag_query
+    ds = load_golden_dataset()
     questions = ds["question"]
     results = [None] * len(questions)
 
@@ -100,9 +101,9 @@ def _run_all_queries():
     return results
 
 
-def get_cached_rag_results():
-    """获取缓存的 RAG 查询结果 (session 级)"""
+def get_cached_golden_results():
+    """获取缓存的金标集 RAG 查询结果 (session 级)。"""
     import api.dependencies as deps
-    if deps.rag_system and hasattr(deps.rag_system, '_cached_results'):
-        return deps.rag_system._cached_results
+    if deps.rag_system and hasattr(deps.rag_system, '_cached_golden_results'):
+        return deps.rag_system._cached_golden_results
     return None

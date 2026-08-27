@@ -57,14 +57,7 @@ def _make_recommend_node(fridge_agent):
     """
 
     async def recommend_node(state: FridgeAgentState, config) -> dict:
-        """Agent 推荐节点: 调用 Agent 处理用户消息，返回新的 messages。
-
-        该 Node 在每次 graph.invoke() 时执行:
-        1. StateGraph 从 checkpointer 恢复历史 messages
-        2. 新用户消息追加到 messages 末尾
-        3. Agent 处理（含 tool-calling 循环）
-        4. 返回的 messages 自动持久化到 checkpointer
-        """
+        """Agent 推荐节点: 调用 Agent 处理用户消息，返回新的 messages。"""
         from api.tools import FridgeContext
 
         inventory = state.get("current_inventory", [])
@@ -73,14 +66,30 @@ def _make_recommend_node(fridge_agent):
             inventory = deps.current_fridge_inventory
 
         user_id = config.get("configurable", {}).get("thread_id", "default")
-        result = await fridge_agent.ainvoke(
-            {"messages": state["messages"]},
-            context=FridgeContext(
-                current_inventory=inventory,
-                user_id=user_id,
-            ),
-        )
-        return {"messages": result["messages"]}
+        try:
+            result = await fridge_agent.ainvoke(
+                {"messages": state["messages"]},
+                context=FridgeContext(
+                    current_inventory=inventory,
+                    user_id=user_id,
+                ),
+            )
+            return {"messages": result["messages"]}
+        except Exception as e:
+            # HITL 中断是 LangGraph 控制流异常，必须向上传播让 graph runtime 记录中断
+            # 并发出 on_chain_stream(__interrupt__) 事件（客户端据此收到 stream_interrupt）。
+            # 若在此吞掉，中断丢失 → 客户端永远收不到 stream_interrupt，save_user_preferences 不会执行。
+            from langgraph.errors import GraphInterrupt
+            if isinstance(e, GraphInterrupt):
+                raise
+            # P2 错误边界: Agent 失败时返回友好消息而非传播异常
+            logger.error(f"[Graph] recommend_node 失败 (thread={user_id}): {e}", exc_info=True)
+            from langchain_core.messages import AIMessage
+            return {
+                "messages": [
+                    AIMessage(content=f"抱歉，AI 服务暂时不可用，请稍后重试。（{str(e)[:100]}）")
+                ]
+            }
 
     return recommend_node
 
@@ -147,7 +156,7 @@ def create_fridge_graph(
     graph = workflow.compile(**compile_kwargs)
 
     store_info = f" + Store({type(store).__name__})" if store else ""
-    logger.info(f"FridgeGraph 创建完成 (StateGraph + InMemorySaver{store_info})")
+    logger.info(f"FridgeGraph 创建完成 (StateGraph + {type(checkpointer).__name__}{store_info})")
     return graph
 
 

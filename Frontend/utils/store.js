@@ -17,6 +17,7 @@ const CN_CAT_MAP = {
 export const store = reactive({
 	_foods: [],
 	_nextId: 1,
+	favoriteIds: uni.getStorageSync('fridgeai_favorites') || [],
 
 	deviceStatus: {
 		temperature: null, freezerTemp: null, humidity: null, doorStatus: null, power: null, updatedAt: null,
@@ -196,7 +197,19 @@ export const store = reactive({
 
 	clearAll() { this._foods = []; this._nextId = 1; this._save() },
 
-	
+	toggleFavorite(recipeId) {
+		const id = String(recipeId)
+		const idx = this.favoriteIds.indexOf(id)
+		if (idx === -1) { this.favoriteIds.push(id) }
+		else { this.favoriteIds.splice(idx, 1) }
+		try { uni.setStorageSync('fridgeai_favorites', this.favoriteIds) }
+		catch (e) { console.warn('[Store] 保存收藏失败:', e) }
+	},
+
+	isFavorite(recipeId) {
+		return this.favoriteIds.indexOf(String(recipeId)) !== -1
+	},
+
 	_notifyChanges(changes) {
 		if (changes.length === 0) return
 		if (changes.length <= 3) {

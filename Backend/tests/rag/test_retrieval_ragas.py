@@ -1,34 +1,51 @@
 """
-Ragas RAG 检索与生成质量测试。
+Ragas RAG 检索与生成质量测试 (金标数据集)。
 
-测试目标: 验证 AdvancedGraphRAGSystem 的检索精度和生成质量，覆盖 Milvus 向量检索、
-Neo4j 图检索、HybridRetrieval 融合三种策略，以及 LLM 生成结果的忠实度和相关性。
+测试目标: 基于金标数据集验证 AdvancedGraphRAGSystem 的检索精度和生成质量。
 
 前置条件: Neo4j (7474/7687) + Milvus (19530) 需已启动。
 RAG 系统通过 conftest.py 的 init_rag_system fixture (session scope) 在测试进程中初始化。
 
-数据: 从 eval_data/rag_eval_dataset.json 加载 50 条中文烹饪问答对。
+数据: 从 eval_data/golden_dataset.json 加载 50 条基于项目实际菜谱文件人工标注的问答对。
 框架: Ragas (ContextPrecision/Recall/Faithfulness/AnswerRelevancy/AnswerCorrectness)。
 """
-import os, json, pytest
+import os, json, logging, pytest
 from pathlib import Path
 from datasets import Dataset
 
 
-def load_eval_dataset() -> Dataset:
-    """
-    从 JSON 文件加载 RAG 评测数据集, 转为 HuggingFace Dataset 格式。
 
-    数据集包含 50 条中文烹饪问答对, 覆盖 11 个领域:
-    cooking_technique(13), recipe_detail(11), ingredient_knowledge(5),
-    ingredient_pairing(5), cuisine_knowledge(4), substitution(3),
-    beginner_friendly(2), food_safety(2), kitchen_equipment(2),
-    meal_planning(2), recipe_recommendation(1)。
-
-    每条包含 question(查询), ground_truth(参考答案), category(类别),
-    difficulty(easy/medium/hard), expected_entities(预期实体)。
+def load_golden_dataset() -> Dataset:
     """
-    path = Path(__file__).parent / "eval_data" / "rag_eval_dataset.json"
+    从 JSON 文件加载金标评测数据集, 转为 HuggingFace Dataset 格式。
+
+    数据集包含 50 条基于项目实际菜谱文件人工标注的中文烹饪问答对。
+    - 所有 ground_truth 已经过人工验证 (verified_against_kb=true)
+    - 包含 reference_contexts 字段 (指向 Backend/data/dishes/ 下的真实路径)
+    - 覆盖 11 个领域, 包含 easy/medium/hard 三种难度
+
+    返回的 Dataset 包含字段: question, ground_truth, reference_contexts,
+    category, difficulty, annotated_by, verified_against_kb, annotated_at
+    """
+    path = Path(__file__).parent / "eval_data" / "golden_dataset.json"
+    with open(path, encoding="utf-8") as f:
+        return Dataset.from_list(json.load(f))
+
+
+def load_enhanced_dataset() -> Dataset:
+    """
+    从 JSON 文件加载 AI 增强评测数据集, 转为 HuggingFace Dataset 格式。
+
+    数据集包含 100+ 条经过质控流水线的中文烹饪问答对:
+    - DeepSeek 基于菜谱种子 + 金标集 Few-shot 生成
+    - 千问交叉验证 (score >= 4.0)
+    - 自动质控 (覆盖检查 / 去重 / 过滤)
+
+    如果 enhanced_dataset.json 尚不存在, 返回空 Dataset, 测试将被跳过。
+    """
+    path = Path(__file__).parent / "eval_data" / "enhanced_dataset.json"
+    if not path.exists():
+        return Dataset.from_list([])
     with open(path, encoding="utf-8") as f:
         return Dataset.from_list(json.load(f))
 
@@ -150,9 +167,19 @@ def get_eval_llm():
         temperature=0.0, max_tokens=4096,
         openai_api_key=os.getenv("EVAL_API_KEY"),
         openai_api_base=os.getenv("EVAL_API_BASE", "https://api.deepseek.com/v1"),
-        http_client=httpx.Client(timeout=httpx.Timeout(connect=10, read=600, write=10, pool=10)))
+        http_client=httpx.Client(timeout=httpx.Timeout(connect=10, read=600, write=10, pool=10)),
+        # 禁用 DeepSeek 思考模式: 评测需快速返回纯 JSON, thinking 拖慢响应并触发 Ragas 超时
+        # langchain-openai>=1.0 须顶层显式传 extra_body; 塞进 model_kwargs 会被展开到请求顶层而失效
+        extra_body={"thinking": {"type": "disabled"}},
+    )
     safe_llm = _JsonPromptInjectionMixin(base_llm)
     return LangchainLLMWrapper(safe_llm, bypass_n=True)
+
+
+def _eval_run_config():
+    """评测 RunConfig: 禁用思考后 DeepSeek 秒回, 并发 8→4 缓解限流, 减少超时重试浪费。"""
+    from ragas import RunConfig
+    return RunConfig(max_wait=240, max_retries=2, max_workers=4)
 
 
 def get_eval_embeddings():
@@ -225,10 +252,10 @@ class TestRAGRetrieval:
         """
         from ragas.metrics import ContextPrecision
         from ragas import evaluate, RunConfig
-        from conftest import get_cached_rag_results
+        from conftest import get_cached_golden_results
 
-        ds = load_eval_dataset()
-        cached = get_cached_rag_results()
+        ds = load_golden_dataset()
+        cached = get_cached_golden_results()
         results = cached if cached else [run_rag_query(q) for q in ds["question"]]
         ds = ds.add_column("retrieved_contexts", [r["contexts"] for r in results])
         ds = ds.rename_column("question", "user_input")
@@ -236,7 +263,7 @@ class TestRAGRetrieval:
         score = evaluate(
             ds, metrics=[ContextPrecision()],
             llm=get_eval_llm(), embeddings=get_eval_embeddings(),
-            run_config=RunConfig(max_wait=180, max_retries=3, max_workers=8))
+            run_config=_eval_run_config())
         cp_list = score["context_precision"]
         valid = [v for v in cp_list if v is not None and v == v]
         zeros = sum(1 for v in valid if v == 0.0)
@@ -257,7 +284,7 @@ class TestRAGRetrieval:
 
         目的: 验证路由器的分类逻辑是否正常工作, 确保不是所有查询都走同一种策略。
         """
-        ds = load_eval_dataset()
+        ds = load_golden_dataset()
         results = [run_rag_query(q) for q in ds["question"]]
         strategies = [r["route_strategy"] for r in results]
         print(f"\n  路由分布: { {s: strategies.count(s) for s in set(strategies)} }")
@@ -292,10 +319,10 @@ class TestRAGGeneration:
             ContextPrecision, ContextRecall, Faithfulness,
             AnswerRelevancy, AnswerCorrectness)
         from ragas import evaluate, RunConfig
-        from conftest import get_cached_rag_results
+        from conftest import get_cached_golden_results
 
-        ds = load_eval_dataset()
-        cached = get_cached_rag_results()
+        ds = load_golden_dataset()
+        cached = get_cached_golden_results()
         results = cached if cached else [run_rag_query(q) for q in ds["question"]]
         ds = ds.add_column("response", [r["answer"] for r in results])
         ds = ds.add_column("retrieved_contexts", [r["contexts"] for r in results])
@@ -307,7 +334,7 @@ class TestRAGGeneration:
             metrics=[ContextPrecision(), ContextRecall(), Faithfulness(),
                      AnswerRelevancy(strictness=1), AnswerCorrectness()],
             llm=get_eval_llm(), embeddings=get_eval_embeddings(),
-            run_config=RunConfig(max_wait=180, max_retries=3, max_workers=8))
+            run_config=_eval_run_config())
 
         thresholds = {
             "context_precision": 0.50, "context_recall": 0.40,
@@ -332,3 +359,149 @@ class TestRAGGeneration:
         print("=" * 60)
         print(f"  通过: {passed}/{len(thresholds)}")
         assert passed >= 4, f"仅 {passed}/{len(thresholds)} 项达标 (P1-6: 要求从3/5提升到4/5)"
+
+
+class TestGoldenRAG:
+    """
+    金标集评测 —— 用 50 条人工验证的数据评估 RAG 质量。
+
+    金标集与普通测试集的关键区别:
+    - 每条 ground_truth 已经过人工验证 (verified_against_kb=true)
+    - 包含 reference_contexts 字段用于精确评估 ContextRecall
+    - 阈值更严格，因为 ground_truth 可信度高
+
+    核心指标 (Ragas LLM-as-Judge):
+    - Faithfulness (忠实度): 生成内容是否完全基于检索到的上下文 (>= 0.65)
+    - AnswerRelevancy (答案相关性): 回答是否直接回应了问题 (>= 0.55)
+    - AnswerCorrectness (答案正确性): 回答与 ground_truth 的一致性 (>= 0.55)
+    - ContextRecall (上下文召回率): 检索是否找回了 ground_truth 中包含的信息 (>= 0.45)
+    - ContextPrecision (上下文精度): 检索结果中相关文档的比例 (>= 0.55)
+
+    要求 5 项指标至少 4 项达标。金标集是质量锚点 —— 如果金标集都过不了，
+    说明 RAG 系统存在根本性问题而非数据问题。
+    """
+
+    @pytest.mark.rag
+    @pytest.mark.slow
+    def test_golden_comprehensive(self, init_rag_system):
+        """金标集综合评测: 对 50 条人工验证问题执行完整 RAG 流程并评估 5 项 Ragas 指标。"""
+        from ragas.metrics import (
+            ContextPrecision, ContextRecall, Faithfulness,
+            AnswerRelevancy, AnswerCorrectness)
+        from ragas import evaluate, RunConfig
+        from conftest import get_cached_golden_results
+
+        ds = load_golden_dataset()
+        cached = get_cached_golden_results()
+        results = cached if cached else [run_rag_query(q) for q in ds["question"]]
+        ds = ds.add_column("response", [r["answer"] for r in results])
+        ds = ds.add_column("retrieved_contexts", [r["contexts"] for r in results])
+        ds = ds.rename_column("question", "user_input")
+        ds = ds.rename_column("ground_truth", "reference")
+
+        score = evaluate(
+            ds,
+            metrics=[ContextPrecision(), ContextRecall(), Faithfulness(),
+                     AnswerRelevancy(strictness=1), AnswerCorrectness()],
+            llm=get_eval_llm(), embeddings=get_eval_embeddings(),
+            run_config=_eval_run_config())
+
+        thresholds = {
+            "context_precision": 0.55, "context_recall": 0.45,
+            "faithfulness": 0.65, "answer_relevancy": 0.55,
+            "answer_correctness": 0.55,
+        }
+
+        print("\n" + "=" * 60)
+        print("  Golden RAG 金标集评测 (Ragas)")
+        print("=" * 60)
+        passed = 0
+        for m in thresholds:
+            v_list = score[m]
+            valid = [v for v in v_list if v is not None and v == v]
+            v = sum(valid) / len(valid) if valid else 0.0
+            bar = "█" * min(int(v * 20), 40)
+            ok = v >= thresholds.get(m, 0)
+            flag = "✓" if ok else "✗"
+            nan_note = f" (NaN×{len(v_list)-len(valid)})" if len(valid) < len(v_list) else ""
+            print(f"  {flag} {m:<25s}: {v:.4f} {bar}{nan_note}")
+            if ok:
+                passed += 1
+        print("=" * 60)
+        print(f"  Golden 通过: {passed}/{len(thresholds)}")
+        assert passed >= 4, f"金标集仅 {passed}/{len(thresholds)} 项达标 — RAG 系统存在根本性问题"
+
+    @pytest.mark.rag
+    @pytest.mark.slow
+    def test_golden_route_distribution(self, init_rag_system):
+        """金标集路由分布: 确认至少 2 种检索策略被触发。"""
+        ds = load_golden_dataset()
+        results = [run_rag_query(q) for q in ds["question"]]
+        strategies = [r["route_strategy"] for r in results]
+        dist = {s: strategies.count(s) for s in set(strategies)}
+        print(f"\n  金标集路由分布: {dist}")
+        assert len(set(strategies)) >= 2, (
+            f"金标集路由仅触发 {len(set(strategies))} 种策略, "
+            f"预期 >= 2 (hybrid_traditional/graph_rag/combined)")
+
+
+class TestEnhancedRAG:
+    """
+    AI 增强集评测 —— 用 100+ 条 AI 生成 + 质控验证的数据评估 RAG 质量。
+
+    增强集的定位:
+    - 扩大覆盖面 (100+ 条 vs 金标集 50 条)
+    - 发现金标集未覆盖的盲区
+    - 阈值比金标集宽松 0.05 (数据虽经质控但仍是 AI 辅助生成)
+
+    如果 enhanced_dataset.json 不存在则自动跳过。
+    """
+
+    @pytest.mark.rag
+    @pytest.mark.slow
+    def test_enhanced_comprehensive(self, init_rag_system):
+        """增强集综合评测: ContextPrecision/Recall/Faithfulness/Relevancy/Correctness。"""
+        from ragas.metrics import (
+            ContextPrecision, ContextRecall, Faithfulness,
+            AnswerRelevancy, AnswerCorrectness)
+        from ragas import evaluate, RunConfig
+
+        ds = load_enhanced_dataset()
+        if len(ds) == 0:
+            pytest.skip("enhanced_dataset.json 不存在 — 运行 generate_enhanced_dataset.py 生成")
+
+        results = [run_rag_query(q) for q in ds["question"]]
+        ds = ds.add_column("response", [r["answer"] for r in results])
+        ds = ds.add_column("retrieved_contexts", [r["contexts"] for r in results])
+        ds = ds.rename_column("question", "user_input")
+        ds = ds.rename_column("ground_truth", "reference")
+
+        score = evaluate(
+            ds,
+            metrics=[ContextPrecision(), ContextRecall(), Faithfulness(),
+                     AnswerRelevancy(strictness=1), AnswerCorrectness()],
+            llm=get_eval_llm(), embeddings=get_eval_embeddings(),
+            run_config=_eval_run_config())
+
+        thresholds = {
+            "context_precision": 0.50, "context_recall": 0.40,
+            "faithfulness": 0.60, "answer_relevancy": 0.50,
+            "answer_correctness": 0.50,
+        }
+
+        print("\n" + "=" * 60)
+        print("  Enhanced RAG 增强集评测 (Ragas)")
+        print("=" * 60)
+        passed = 0
+        for m in thresholds:
+            v_list = score[m]
+            valid = [v for v in v_list if v is not None and v == v]
+            v = sum(valid) / len(valid) if valid else 0.0
+            ok = v >= thresholds.get(m, 0)
+            flag = "✓" if ok else "✗"
+            print(f"  {flag} {m:<25s}: {v:.4f}")
+            if ok:
+                passed += 1
+        print("=" * 60)
+        print(f"  Enhanced 通过: {passed}/{len(thresholds)}")
+        assert passed >= 4, f"增强集仅 {passed}/{len(thresholds)} 项达标"
