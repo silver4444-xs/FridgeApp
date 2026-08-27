@@ -11,8 +11,11 @@
 
 // === 部署时修改此值 ===
 const DEFAULT_BACKEND_URL = 'http://localhost:8000'
-// 开发默认 API Key（与后端 .env 的 API_KEY 一致）；用户可在存储 'api_key' 覆盖
-const DEFAULT_API_KEY = 'all-in-rag'
+// API Key 一律不内置默认值 —— 前端产物会被打包分发，写死等同公开泄露。
+// 取值来源：用户在设置页填入，存于 uni.getStorageSync('api_key')。
+// 留空时 getWsUrl() 不拼接 api_key 参数，后端开发模式仍可连通；
+// 生产环境（后端已设 API_KEY）必须由用户在设置页配置。
+const DEFAULT_API_KEY = ''
 
 export function getBackendUrl() {
 	try {

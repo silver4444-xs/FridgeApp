@@ -11,9 +11,11 @@ E2E 验证: /ws/chat 触发 save_user_preferences → HITL interrupt → approve
 """
 import asyncio
 import json
+import os
 from collections import Counter
 
-API_KEY = "all-in-rag"
+# 从环境变量读取; 后端在 API_KEY 未设置时为开发模式放行, 故空值是合法的
+API_KEY = os.getenv("API_KEY", "")
 WS_URL = f"ws://127.0.0.1:8000/ws/chat?api_key={API_KEY}"
 THREAD_ID = "e2e_verify_20260822"
 MESSAGE = "我不吃辣，帮我记住这个忌口"

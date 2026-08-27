@@ -17,6 +17,7 @@
 import argparse
 import asyncio
 import json
+import os
 import sys
 import uuid
 
@@ -66,7 +67,8 @@ def _token_count(events):
 async def main():
     parser = argparse.ArgumentParser(description="多 worker 无状态化验证")
     parser.add_argument("--url", default="ws://127.0.0.1:8000/ws/chat")
-    parser.add_argument("--api-key", default="all-in-rag")
+    # 默认取自环境变量; 后端在 API_KEY 未设置时为开发模式放行, 故空值合法
+    parser.add_argument("--api-key", default=os.getenv("API_KEY", ""))
     parser.add_argument("--thread-id", default=f"verify_multi_worker_{uuid.uuid4().hex[:8]}")
     args = parser.parse_args()
 
