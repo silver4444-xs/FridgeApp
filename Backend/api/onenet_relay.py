@@ -12,12 +12,13 @@ import base64
 import asyncio
 import logging
 from pathlib import Path
-from dataclasses import dataclass, field
 from urllib.parse import quote
 
 from typing import Optional
 
 import httpx
+
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -135,13 +136,12 @@ def _foods_to_pipe(foods: list) -> tuple[str, list]:
     return ';'.join(segments), food_items
 
 
-@dataclass
-class UploadTask:
+class UploadTask(BaseModel):
     upload_id: str
     foods: list
     pipe_value: str
     food_items: list
-    created_at: float = field(default_factory=time.time)
+    created_at: float = Field(default_factory=time.time)
     retry_count: int = 0
     max_retries: int = MAX_RETRIES
     next_retry_at: float = 0.0

@@ -8,7 +8,6 @@ V: 详细描述段落（包含相关文本片段）
 import json
 import logging
 from typing import Dict, List, Tuple, Any, Optional
-from dataclasses import dataclass
 from collections import defaultdict
 
 from pydantic import BaseModel, Field
@@ -18,8 +17,7 @@ from prompts.relation_keys import ENHANCE_RELATION_KEYS
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class EntityKeyValue:
+class EntityKeyValue(BaseModel):
     """实体键值对"""
     entity_name: str
     index_keys: List[str]  # 索引键列表
@@ -27,8 +25,7 @@ class EntityKeyValue:
     entity_type: str       # 实体类型 (Recipe, Ingredient, CookingStep)
     metadata: Dict[str, Any]
 
-@dataclass
-class RelationKeyValue:
+class RelationKeyValue(BaseModel):
     """关系键值对"""
     relation_id: str
     index_keys: List[str]  # 多个索引键（可包含全局主题）

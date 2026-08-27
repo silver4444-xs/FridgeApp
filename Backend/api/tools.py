@@ -13,9 +13,9 @@ Phase 1.3: ToolRuntime 上下文注入
 """
 import json
 import logging
-from dataclasses import dataclass, field
 from typing import List, Optional
 
+from pydantic import BaseModel, Field
 from langchain.tools import tool, ToolRuntime
 
 logger = logging.getLogger(__name__)
@@ -25,8 +25,7 @@ logger = logging.getLogger(__name__)
 #   store._foods → 前端 computed foods → 编辑时 uploadViaWs(store.foods)
 #   无需前端/LLM 显式传递食材列表。
 
-@dataclass
-class FridgeContext:
+class FridgeContext(BaseModel):
     """冰箱上下文 —— 每次 Agent 调用时注入的运行时数据。
 
     通过 agent.invoke(..., context=FridgeContext(...)) 传入，
@@ -38,10 +37,10 @@ class FridgeContext:
     # ── 改进后 (Phase 3.5: Long-term Memory): ──
     # 新增 user_id 字段，配合 InMemoryStore 实现跨会话偏好持久化
     # user_preferences 保留作为单次调用的 fallback（首次对话无历史时使用）
-    current_inventory: List[dict] = field(default_factory=list)
+    current_inventory: List[dict] = Field(default_factory=list)
     """当前冰箱食材快照，每项格式: {"name": "鸡蛋", "qty": 6, "cal": 74, "cat": "肉蛋生鲜类"}"""
 
-    user_preferences: dict = field(default_factory=dict)
+    user_preferences: dict = Field(default_factory=dict)
     """用户偏好 (单次调用 fallback)，如 {"忌口": ["花生", "海鲜"], "偏好菜系": "川菜", "人数": 2}"""
 
     user_id: str = "default"
@@ -143,6 +142,50 @@ def get_fridge_inventory(runtime: ToolRuntime[FridgeContext]) -> str:
 #         return json.dumps({"status": "empty", "message": "冰箱暂未同步数据"})
 #     items = parse_compact_inventory(relay._last_value)
 #     return json.dumps(items, ensure_ascii=False, indent=2)
+def _match_recipes(fridge_items, limit=5, avoid_list=None):
+    """共用匹配管道: 食材归一化 → 倒排查找 → 匹配计数 → 排序。
+
+    P2 #11 修复: recommend_by_fridge 和 search_recipes_by_ingredients
+    共享此管道，消除 ~60 行重复逻辑。
+    """
+    from api.dependencies import recipe_db, inverted_index
+    from matching.fuzzy_matcher import FuzzyMatcher
+
+    fridge_names = FuzzyMatcher.normalize_fridge_items(fridge_items)
+    candidate_ids = inverted_index.fuzzy_lookup(fridge_names)
+
+    results = []
+    for rid in candidate_ids:
+        recipe = recipe_db.get(rid)
+        if not recipe:
+            continue
+        matched, missing = [], []
+        for ing in recipe.get("ingredients", []):
+            if FuzzyMatcher.is_match(ing, fridge_names):
+                matched.append(ing["name"])
+            elif ing.get("required", True):
+                missing.append(ing["name"])
+        match_count = len(matched)
+        total = len([i for i in recipe.get("ingredients", []) if i.get("required", True)])
+
+        if avoid_list:
+            recipe_text = recipe.get("name", "") + " ".join(
+                i["name"] for i in recipe.get("ingredients", []))
+            if any(av in recipe_text for av in avoid_list):
+                continue
+
+        results.append({
+            "id": recipe["id"], "name": recipe["name"],
+            "category": recipe.get("category", "其他"),
+            "difficulty": recipe.get("difficulty", "未知"),
+            "time": recipe.get("time", "未知"),
+            "match_count": match_count, "total_ingredients": total,
+            "matched": matched, "missing": missing,
+        })
+    results.sort(key=lambda r: r["match_count"], reverse=True)
+    return results[:limit]
+
+
 #   倒排索引查找 → 模糊匹配 → 排序 → 返回
 @tool
 def search_recipes_by_ingredients(ingredients: List[str], limit: int = 5) -> str:
@@ -165,9 +208,6 @@ def search_recipes_by_ingredients(ingredients: List[str], limit: int = 5) -> str
     #         ...  # 匹配+排序逻辑
     # ──────────────────────────────────────
 
-    from api.dependencies import recipe_db, inverted_index
-    from matching.fuzzy_matcher import FuzzyMatcher
-
     # Fix #4: 食材名归一化时保留分类信息
     _CN_CAT_MAP = {
         '水果': 'fruit', '蔬菜': 'vegetable', '肉蛋生鲜类': 'meat_egg',
@@ -185,43 +225,7 @@ def search_recipes_by_ingredients(ingredients: List[str], limit: int = 5) -> str
             name = str(ing)
         norm_items.append({"name": name, "cat": cat})
 
-    fridge_names = FuzzyMatcher.normalize_fridge_items(norm_items)
-
-    # 倒排索引查找候选菜谱
-    candidate_ids = inverted_index.fuzzy_lookup(fridge_names)
-
-    results = []
-    for rid in candidate_ids:
-        recipe = recipe_db.get(rid)
-        if not recipe:
-            continue
-
-        matched = []
-        missing = []
-        for ing in recipe.get("ingredients", []):
-            if FuzzyMatcher.is_match(ing, fridge_names):
-                matched.append(ing["name"])
-            elif ing.get("required", True):
-                missing.append(ing["name"])
-
-        match_count = len(matched)
-        total = len([i for i in recipe.get("ingredients", [])
-                     if i.get("required", True)])
-
-        results.append({
-            "id": recipe["id"],
-            "name": recipe["name"],
-            "category": recipe.get("category", "其他"),
-            "difficulty": recipe.get("difficulty", "未知"),
-            "time": recipe.get("time", "未知"),
-            "match_count": match_count,
-            "total_ingredients": total,
-            "matched": matched,
-            "missing": missing,
-        })
-
-    results.sort(key=lambda r: r["match_count"], reverse=True)
-    results = results[:limit]
+    results = _match_recipes(norm_items, limit=limit)
 
     if not results:
         return ToolResponse.empty("未找到匹配的菜谱。请尝试添加更多食材或调整搜索条件。")
@@ -293,21 +297,39 @@ def find_substitutions(ingredient_name: str) -> str:
     # 未来改进: 将 Agent 模型通过 runtime.context 注入，或使用 ToolRuntime.store 缓存结果。
 
     from api.dependencies import fridge_model
-    from langchain_core.messages import HumanMessage
+    from langchain_core.prompts import ChatPromptTemplate
 
-    if fridge_model is None:
-        return ToolResponse.ok(
-            data={"ingredient": ingredient_name, "suggestions": [f"{ingredient_name} 可在超市购买或尝试省略"]},
-            message="LLM 未初始化，使用基础建议",
-        )
+    # ── P1-B 修复: ChatPromptTemplate 安全模板替代 f-string 直接插值 ──
+    # 模板变量 {ingredient_name} 由 LangChain 自动转义，阻止 Prompt 注入
+    _SUBSTITUTION_TEMPLATE = ChatPromptTemplate.from_messages([
+        ("system", "你是一位专业厨师。"),
+        ("user",
+            "用户想做菜但缺少食材「{ingredient_name}」。"
+            "请为该食材建议2-3种可行的替代方案，并简要说明每种替代对口味的影响。"),
+    ])
+    # 提前构建 messages（修复原 line 316 在 prompt 定义前引用它的 NameError）
+    messages = _SUBSTITUTION_TEMPLATE.format_messages(ingredient_name=ingredient_name)
 
-    prompt = (
-        f"你是一位专业厨师。用户想做菜但缺少食材「{ingredient_name}」。\n"
-        f"请为该食材建议2-3种可行的替代方案，并简要说明每种替代对口味的影响。"
-    )
+    model_to_use = fridge_model
+    if model_to_use is None:
+        # P2 #10: 静默降级 → 创建临时 LLM 实例
+        import os, httpx
+        from langchain.chat_models import init_chat_model
+        try:
+            model_to_use = init_chat_model(
+                f"openai:{os.getenv('LLM_MODEL', 'deepseek-v4-flash')}",
+                temperature=0.1, max_tokens=1024,
+                openai_api_key=os.getenv("DEEPSEEK_API_KEY"),
+                openai_api_base=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
+                http_client=httpx.Client(
+                    timeout=httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0),
+                ),
+            )
+        except Exception as e:
+            return ToolResponse.fail(error=f"LLM 不可用: {str(e)[:200]}")
 
     try:
-        response_msg = fridge_model.invoke([HumanMessage(content=prompt)])
+        response_msg = model_to_use.invoke(messages)
         return ToolResponse.ok(data={
             "ingredient": ingredient_name,
             "suggestions": response_msg.content,
@@ -388,10 +410,8 @@ def recommend_by_fridge(
     # ... 匹配+排序 → RecommendResponse
     # ─────────────────────────────────────────────────────────────
 
-    from api.dependencies import recipe_db, inverted_index
     from matching.fuzzy_matcher import FuzzyMatcher
 
-    # 关键: 从 runtime.context 自动获取冰箱食材，无需 LLM 传参
     inventory = runtime.context.current_inventory
     prefs = runtime.context.user_preferences
 
@@ -401,57 +421,13 @@ def recommend_by_fridge(
             message="冰箱里暂时没有食材。请先用「添加食材」功能放入食材，我再为您推荐菜谱。",
         )
 
-    # 归一化冰箱中的食材名
-    fridge_names = FuzzyMatcher.normalize_fridge_items([
+    avoid_list = prefs.get("忌口", [])
+    norm_items = [
         {"name": item.get("name", ""), "cat": item.get("cat", "packaged")}
         for item in inventory
-    ])
+    ]
 
-    # 倒排索引查找候选菜谱
-    candidate_ids = inverted_index.fuzzy_lookup(fridge_names)
-
-    # 用户偏好过滤关键词
-    avoid_list = prefs.get("忌口", [])
-
-    results = []
-    for rid in candidate_ids:
-        recipe = recipe_db.get(rid)
-        if not recipe:
-            continue
-
-        matched = []
-        missing = []
-        for ing in recipe.get("ingredients", []):
-            if FuzzyMatcher.is_match(ing, fridge_names):
-                matched.append(ing["name"])
-            elif ing.get("required", True):
-                missing.append(ing["name"])
-
-        match_count = len(matched)
-        total = len([i for i in recipe.get("ingredients", [])
-                     if i.get("required", True)])
-
-        # 用户忌口过滤
-        if avoid_list:
-            recipe_text = recipe.get("name", "") + " ".join(
-                i["name"] for i in recipe.get("ingredients", []))
-            if any(av in recipe_text for av in avoid_list):
-                continue
-
-        results.append({
-            "id": recipe["id"],
-            "name": recipe["name"],
-            "category": recipe.get("category", "其他"),
-            "difficulty": recipe.get("difficulty", "未知"),
-            "time": recipe.get("time", "未知"),
-            "match_count": match_count,
-            "total_ingredients": total,
-            "matched": matched,
-            "missing": missing,
-        })
-
-    results.sort(key=lambda r: r["match_count"], reverse=True)
-    results = results[:limit]
+    results = _match_recipes(norm_items, limit=limit, avoid_list=avoid_list)
 
     if not results:
         return ToolResponse.ok(
@@ -476,7 +452,7 @@ def recommend_by_fridge(
 #   - get_user_preferences: 每次对话开始时自动读取历史偏好
 # Store 模式: namespace=("preferences",), key=user_id, value=dict
 @tool
-def save_user_preferences(
+async def save_user_preferences(
     preferences: dict,
     runtime: ToolRuntime[FridgeContext],
 ) -> str:
@@ -488,7 +464,7 @@ def save_user_preferences(
     - Agent 检测到新的用户偏好时主动保存
 
     Args:
-        preferences: 要保存的偏好键值对，如 {"忌口":["花生"],"偏好菜系":"川菜","人数":2}
+        preferences: 要保存的偏好键值对，如 {"忌口":["花生"],"偏好菜系":"川菜","人数":2,"喜欢的食材":["西红柿"]}
                      支持部分更新 — 只传需要变更的字段即可
 
     Returns:
@@ -503,13 +479,13 @@ def save_user_preferences(
     user_id = runtime.context.user_id
 
     # 读取已有偏好并合并（新值覆盖旧值）
-    existing = store.get(("preferences",), user_id)
+    existing = await store.aget(("preferences",), user_id)
     if existing and existing.value:
         merged = {**existing.value, **preferences}
     else:
         merged = preferences
 
-    store.put(("preferences",), user_id, merged)
+    await store.aput(("preferences",), user_id, merged)
     return ToolResponse.ok(
         data={"saved": merged},
         message=f"已保存 {len(merged)} 项偏好到长期记忆",
@@ -517,7 +493,7 @@ def save_user_preferences(
 
 
 @tool
-def get_user_preferences(
+async def get_user_preferences(
     runtime: ToolRuntime[FridgeContext],
 ) -> str:
     """读取用户已保存的饮食偏好（跨会话持久化）。
@@ -535,7 +511,7 @@ def get_user_preferences(
     store = runtime.store
     user_id = runtime.context.user_id
 
-    prefs = store.get(("preferences",), user_id)
+    prefs = await store.aget(("preferences",), user_id)
     if prefs and prefs.value:
         return ToolResponse.ok(data={"preferences": prefs.value})
 
@@ -548,7 +524,7 @@ def get_user_preferences(
 
     return ToolResponse.ok(
         data={"preferences": {}},
-        message="暂无保存的饮食偏好。您可以告诉我您的忌口、偏好菜系等信息，我会记住。",
+        message="无已保存偏好",
     )
 
 

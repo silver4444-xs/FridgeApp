@@ -5,6 +5,8 @@ from .query_analysis import ANALYZE_QUERY
 from .keyword_extraction import EXTRACT_QUERY_KEYWORDS
 from .answer_generation import GENERATE_ADAPTIVE_ANSWER
 from .relation_keys import ENHANCE_RELATION_KEYS
+from .graph_reasoning import GRAPH_REASONING_PROMPT
+from .query_rewrite import REWRITE_QUERY
 
 __all__ = [
     "UNDERSTAND_GRAPH_QUERY",
@@ -12,4 +14,6 @@ __all__ = [
     "EXTRACT_QUERY_KEYWORDS",
     "GENERATE_ADAPTIVE_ANSWER",
     "ENHANCE_RELATION_KEYS",
+    "GRAPH_REASONING_PROMPT",
+    "REWRITE_QUERY",
 ]

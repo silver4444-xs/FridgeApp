@@ -6,7 +6,6 @@
 import json
 import logging
 from collections import defaultdict, deque
-from dataclasses import dataclass
 from typing import List, Dict, Tuple, Any, Optional, Set
 from enum import Enum
 
@@ -35,8 +34,7 @@ class GraphQuery(BaseModel):
     max_nodes: int = Field(default=50, description="最大节点数")
     constraints: Optional[Dict[str, Any]] = Field(default=None, description="属性级约束(健康/时间/口味偏好等)")
 
-@dataclass
-class GraphPath:
+class GraphPath(BaseModel):
     """图路径结构"""
     nodes: List[Dict[str, Any]]
     relationships: List[Dict[str, Any]]
@@ -44,14 +42,27 @@ class GraphPath:
     relevance_score: float
     path_type: str
 
-@dataclass
-class KnowledgeSubgraph:
+class KnowledgeSubgraph(BaseModel):
     """知识子图结构"""
     central_nodes: List[Dict[str, Any]]
     connected_nodes: List[Dict[str, Any]]
     relationships: List[Dict[str, Any]]
     graph_metrics: Dict[str, float]
     reasoning_chains: List[List[str]]
+
+
+class GraphReasoningOutput(BaseModel):
+    """图结构推理输出 (Pydantic BaseModel, 支持 langchain with_structured_output)"""
+    reasoning_patterns: List[str] = Field(
+        description="识别出的推理模式列表, 如 '组成推理: 食材组合分析', '分类推理: 菜系特征分析'"
+    )
+    reasoning_chains: List[str] = Field(
+        description="具体的推理链列表, 每条用中文描述, 必须引用子图中真实存在的节点名称和关系类型"
+    )
+    key_insights: List[str] = Field(
+        description="从子图中提取的关键事实发现, 对回答用户查询有帮助"
+    )
+
 
 class GraphRAGRetrieval:
     """
@@ -309,30 +320,42 @@ class GraphRAGRetrieval:
     
     def graph_structure_reasoning(self, subgraph: KnowledgeSubgraph, query: str) -> List[str]:
         """
-        基于图结构的推理：这是图RAG的智能之处
-        不仅检索信息，还能进行逻辑推理
+        基于图结构的推理：使用 LLM 分析真实 Neo4j 子图数据，生成推理链。
+
+        单次 LLM 调用完成 识别推理模式 → 构建推理链 → 提取关键发现，
+        严格基于 extract_knowledge_subgraph 返回的真实节点和关系。
         """
-        reasoning_chains = []
-        
-        try:
-            # 1. 识别推理模式
-            reasoning_patterns = self._identify_reasoning_patterns(subgraph)
-            
-            # 2. 构建推理链
-            for pattern in reasoning_patterns:
-                chain = self._build_reasoning_chain(pattern, subgraph)
-                if chain:
-                    reasoning_chains.append(chain)
-            
-            # 3. 验证推理链的可信度
-            validated_chains = self._validate_reasoning_chains(reasoning_chains, query)
-            
-            logger.info(f"图结构推理完成，生成 {len(validated_chains)} 条推理链")
-            return validated_chains
-            
-        except Exception as e:
-            logger.error(f"图结构推理失败: {e}")
+        if not subgraph.central_nodes and not subgraph.connected_nodes:
+            logger.info("空子图，跳过图推理")
             return []
+
+        subgraph_text = self._build_detailed_subgraph_description(subgraph)
+
+        try:
+            from prompts.graph_reasoning import GRAPH_REASONING_PROMPT
+
+            messages = GRAPH_REASONING_PROMPT.format_prompt(
+                query=query,
+                subgraph_text=subgraph_text,
+            )
+
+            structured_llm = self.llm_client.with_structured_output(
+                GraphReasoningOutput, method="function_calling"
+            )
+            output: GraphReasoningOutput = structured_llm.invoke(messages)
+
+            chains = output.reasoning_chains or []
+            subgraph.reasoning_chains = [chains]
+
+            logger.info(
+                f"LLM 图推理完成: {len(output.reasoning_patterns)} patterns, "
+                f"{len(chains)} chains, {len(output.key_insights)} insights"
+            )
+            return chains
+
+        except Exception as e:
+            logger.warning(f"LLM 图推理失败 ({e})，回退到确定性推理")
+            return self._fallback_graph_reasoning(subgraph, query)
     
     def adaptive_query_planning(self, query: str) -> List[GraphQuery]:
         """
@@ -519,16 +542,25 @@ class GraphRAGRetrieval:
             
         return documents
     
-    def _subgraph_to_documents(self, subgraph: KnowledgeSubgraph, 
+    def _subgraph_to_documents(self, subgraph: KnowledgeSubgraph,
                               reasoning_chains: List[str], query: str) -> List[Document]:
-        """将知识子图转换为Document对象"""
+        """将知识子图转换为Document对象，推理链注入 page_content 供下游 LLM 使用"""
         documents = []
-        
-        # 子图整体描述
+
         subgraph_desc = self._build_subgraph_description(subgraph)
-        
+
+        # 推理链注入 page_content 头部，确保 generate_adaptive_answer 能读到
+        content_parts = []
+        if reasoning_chains:
+            content_parts.append("## 图结构推理链\n")
+            for i, chain in enumerate(reasoning_chains, 1):
+                content_parts.append(f"{i}. {chain}")
+            content_parts.append("")
+        content_parts.append(subgraph_desc)
+        page_content = "\n".join(content_parts)
+
         doc = Document(
-            page_content=subgraph_desc,
+            page_content=page_content,
             metadata={
                 "search_type": "knowledge_subgraph",
                 "node_count": len(subgraph.connected_nodes),
@@ -539,26 +571,104 @@ class GraphRAGRetrieval:
             }
         )
         documents.append(doc)
-        
+
         return documents
     
     def _build_path_description(self, path: GraphPath) -> str:
-        """构建路径的自然语言描述，包含节点类型和关系类型"""
+        """构建路径的自然语言描述 (P1 修复: 图三元组 → 中文可读链)。
+
+        将英文关系类型与节点标签翻译为中文, 输出如:
+            口水鸡（菜品） —需要→ 鸡（食材） —同义于→ 母鸡（食材）
+        替代旧的 raw 形式 `口水鸡(Recipe) --[REQUIRES]--> 鸡(Ingredient)`。
+        """
         if not path.nodes:
             return "空路径"
 
-        desc_parts = []
+        relation_labels = {
+            "REQUIRES": "需要",
+            "CONTAINS_STEP": "包含步骤",
+            "SAME_AS": "同义于",
+        }
+        node_labels = {
+            "Recipe": "菜品",
+            "Ingredient": "食材",
+            "CookingStep": "烹饪步骤",
+        }
+
+        parts = []
         for i, node in enumerate(path.nodes):
             name = node.get("name", f"节点{i}")
             labels = node.get("labels", [])
-            label_str = "/".join(labels) if labels else "实体"
-            desc_parts.append(f"{name}({label_str})")
-            if i < len(path.relationships):
-                rel = path.relationships[i]
-                rel_type = rel.get("type", "相关")
-                desc_parts.append(f" --[{rel_type}]--> ")
+            translated = [node_labels.get(l, l) for l in labels] if labels else ["实体"]
+            label_str = "/".join(translated)
 
-        return "".join(desc_parts)
+            # 前一条关系连接 node[i-1] → node[i]
+            if i > 0:
+                rel = path.relationships[i - 1] if i - 1 < len(path.relationships) else {}
+                rel_type = rel.get("type", "相关")
+                rel_label = relation_labels.get(rel_type, rel_type)
+                parts.append(f" —{rel_label}→ ")
+
+            parts.append(f"{name}（{label_str}）")
+
+        return "".join(parts)
+
+    def _build_detailed_subgraph_description(self, subgraph: KnowledgeSubgraph) -> str:
+        """构建子图的详细文本描述，供 LLM 推理使用。
+
+        按标签类型分组节点、统计关系类型分布、附带图指标。
+        比 _build_subgraph_description 更丰富，包含节点类型信息用于推理。
+        """
+        from collections import Counter
+        lines = []
+
+        # 1. 核心实体
+        if subgraph.central_nodes:
+            lines.append("【核心实体】")
+            for node in subgraph.central_nodes:
+                name = node.get("name", "未知")
+                labels = node.get("labels", [])
+                props = {k: v for k, v in node.items()
+                         if k not in ("name", "labels", "nodeId") and v}
+                prop_str = ", ".join(f"{k}={v}" for k, v in list(props.items())[:5])
+                label_str = "/".join(labels) if labels else "实体"
+                lines.append(f"  {name} (类型: {label_str})"
+                             + (f" [{prop_str}]" if prop_str else ""))
+
+        # 2. 关联节点按标签分组
+        if subgraph.connected_nodes:
+            by_label = {}
+            for node in subgraph.connected_nodes:
+                name = node.get("name", "")
+                if not name:
+                    continue
+                labels = node.get("labels", ["未知"])
+                label_key = "/".join(labels) if labels else "未知"
+                by_label.setdefault(label_key, []).append(name)
+
+            lines.append(f"\n【关联节点 ({len(subgraph.connected_nodes)}个)】")
+            for label_key, names in by_label.items():
+                displayed = names[:30]
+                suffix = f" ...等共{len(names)}个" if len(names) > 30 else ""
+                lines.append(f"  {label_key}: {', '.join(displayed)}{suffix}")
+
+        # 3. 关系类型分布
+        if subgraph.relationships:
+            rel_type_counts = Counter(
+                r.get("type", "未知") for r in subgraph.relationships if r.get("type")
+            )
+            lines.append(f"\n【关系类型】")
+            for rel_type, count in rel_type_counts.most_common():
+                lines.append(f"  - {rel_type}: {count}条关系")
+
+        # 4. 图指标
+        if subgraph.graph_metrics:
+            m = subgraph.graph_metrics
+            lines.append(f"\n【图指标】节点数={m.get('node_count',0)}, "
+                         f"关系数={m.get('relationship_count',0)}, "
+                         f"密度={m.get('density',0):.3f}")
+
+        return "\n".join(lines) if lines else "空知识子图"
 
     def _build_subgraph_description(self, subgraph: KnowledgeSubgraph) -> str:
         """构建子图的自然语言描述，包含实际节点和关系名称"""
@@ -596,17 +706,46 @@ class GraphRAGRetrieval:
         score = sum(1 for indicator in complexity_indicators if indicator in query)
         return min(score / len(complexity_indicators), 1.0)
     
-    def _identify_reasoning_patterns(self, subgraph: KnowledgeSubgraph) -> List[str]:
-        """识别推理模式"""
-        return ["因果关系", "组成关系", "相似关系"]
-    
-    def _build_reasoning_chain(self, pattern: str, subgraph: KnowledgeSubgraph) -> Optional[str]:
-        """构建推理链"""
-        return f"基于{pattern}的推理链"
-    
-    def _validate_reasoning_chains(self, chains: List[str], query: str) -> List[str]:
-        """验证推理链"""
-        return chains[:3]
+    def _fallback_graph_reasoning(self, subgraph: KnowledgeSubgraph, query: str) -> List[str]:
+        """确定性降级推理：从子图真实数据计算节点/关系分布，生成有意义的推理链。
+
+        当 LLM 调用失败时使用，所有输出基于实际 Neo4j 数据。
+        """
+        from collections import Counter
+        chains = []
+
+        # 推理 1: 实体类型分布
+        if subgraph.central_nodes:
+            central_names = [n.get("name", "") for n in subgraph.central_nodes if n.get("name")]
+            label_counts = Counter()
+            for n in subgraph.connected_nodes:
+                for lbl in n.get("labels", []):
+                    label_counts[lbl] += 1
+            type_summary = ", ".join(f"{lbl}:{cnt}个" for lbl, cnt in label_counts.most_common(4))
+            chains.append(
+                f"组成推理: '{', '.join(central_names)}' 关联了 {len(subgraph.connected_nodes)} 个节点"
+                + (f" ({type_summary})" if type_summary else "")
+            )
+
+        # 推理 2: 关系类型分布
+        if subgraph.relationships:
+            rel_counts = Counter(
+                r.get("type", "未知") for r in subgraph.relationships if r.get("type")
+            )
+            rel_summary = ", ".join(f"{t}x{c}" for t, c in rel_counts.most_common(4))
+            chains.append(f"关系推理: 子图中存在 {rel_summary} 等关系类型")
+
+        # 推理 3: 结构密度
+        if subgraph.graph_metrics:
+            density = subgraph.graph_metrics.get("density", 0)
+            if density > 0.3:
+                chains.append("结构推理: 子图密度较高, 实体间连接紧密, 可能存在强关联集群")
+            elif density > 0.05:
+                chains.append("结构推理: 子图密度中等, 存在核心-外围结构, 核心实体起桥梁作用")
+            else:
+                chains.append("结构推理: 子图较稀疏, 主要是星型/链式结构")
+
+        return chains[:5]
     
     def _find_entity_relations(self, graph_query: GraphQuery, session) -> List[GraphPath]:
         """查找实体间关系: 在 Neo4j 中查询源实体和目标实体之间的直接关系"""

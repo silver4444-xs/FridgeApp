@@ -6,7 +6,19 @@ import os
 import sys
 import logging
 from pathlib import Path
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, AsyncExitStack
+
+# ── Windows GBK 兼容 (PG 迁移依赖) ──
+# main.py 多处 print() 使用 emoji (✅❌)，GBK stdout 下触发 UnicodeEncodeError → RAG 初始化失败。
+# 强制 stdout 用 UTF-8（与 tests/rag/conftest.py 同一模式）。
+# 注意: psycopg async 需要 SelectorEventLoop；uvicorn 在 Windows 上须用 `--reload` 启动
+#       （无 --reload 时 uvicorn 用 ProactorEventLoop → AsyncPostgresStore/Saver 回退 InMemory）。
+import io as _io
+if hasattr(sys.stdout, "buffer") and (sys.stdout.encoding or "").lower() != "utf-8":
+    sys.stdout = _io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent.parent / ".env")  # 先加载 .env，再导入 api.auth（其模块级 API_KEY 依赖 .env）
 
 from fastapi import FastAPI, Depends
 from api.auth import verify_api_key
@@ -14,9 +26,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from dotenv import load_dotenv
-load_dotenv()
 
 from api.logging_config import setup_logging
 setup_logging()
@@ -27,6 +36,12 @@ from api.dependencies import recipe_db, inverted_index
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # uvicorn 自带 access/error handler (propagate=False)，格式与结构化日志混杂。
+    # configure_logging() 在 app import 之后、lifespan 之前运行，故在此剥离并转投 root。
+    for _name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        _uv = logging.getLogger(_name)
+        _uv.handlers = []
+        _uv.propagate = True
     logger.info("=== FridgeAI 后端启动中 ===")
 
     # ── LangSmith 可观测性 ──
@@ -81,31 +96,70 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"RAG 系统初始化失败: {e}")
 
-    # ── Phase 3.5 + Phase 4: 持久化 Store + Checkpointer ──
-    # 使用 SQLite 替代 InMemory，数据在重启后保留
-    # 共享同一 DB 文件: checkpoints.db
+    # ── 持久化 Store + Checkpointer (PostgreSQL, 全异步) ──
+    # 会话历史 + HITL 中断状态 → AsyncPostgresSaver (checkpointer)
+    # 用户偏好 → AsyncPostgresStore (store)
+    # from_conn_string() 返回 async context manager，用 AsyncExitStack 管理生命周期
     import api.dependencies as deps
 
-    # Store: 跨会话持久化用户偏好
-    try:
-        from api.persistent_store import SQLiteStore
-        _db_path = os.getenv("SQLITE_DB_PATH", "checkpoints.db")
-        deps.fridge_store = SQLiteStore(_db_path)
-        logger.info("SQLiteStore 创建完成 (用户偏好持久化)")
-    except Exception as e:
-        logger.warning(f"SQLiteStore 创建失败，回退到 InMemoryStore: {e}")
+    _pg_exit_stack = AsyncExitStack()
+    _pg_uri = os.getenv("POSTGRES_URI")
+    from config import reliability_config
+
+    # Store: 跨会话持久化用户偏好（异步）
+    if _pg_uri:
+        try:
+            from langgraph.store.postgres.aio import AsyncPostgresStore
+            _store = await _pg_exit_stack.enter_async_context(
+                AsyncPostgresStore.from_conn_string(
+                    _pg_uri,
+                    pool_config={
+                        "min_size": reliability_config.pg_pool_min_size,
+                        "max_size": reliability_config.pg_pool_max_size,
+                    },
+                )
+            )
+            await _store.setup()
+            deps.fridge_store = _store
+            logger.info("AsyncPostgresStore 创建完成 (用户偏好持久化, 连接池)")
+        except Exception as e:
+            logger.warning(f"AsyncPostgresStore 创建失败，回退到 InMemoryStore: {e}")
+            from langgraph.store.memory import InMemoryStore
+            deps.fridge_store = InMemoryStore()
+    else:
+        logger.warning("POSTGRES_URI 未配置，Store 回退到 InMemoryStore")
         from langgraph.store.memory import InMemoryStore
         deps.fridge_store = InMemoryStore()
 
-    # Checkpointer: HITL 中断状态持久化
-    try:
-        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-        _db_path = os.getenv("SQLITE_DB_PATH", "checkpoints.db")
-        deps.fridge_checkpointer = AsyncSqliteSaver.from_conn_string(_db_path)
-        await deps.fridge_checkpointer.setup()
-        logger.info("AsyncSqliteSaver 创建完成 (HITL 状态持久化)")
-    except Exception as e:
-        logger.warning(f"AsyncSqliteSaver 创建失败，回退到 InMemorySaver: {e}")
+    # Checkpointer: 会话历史 + HITL 中断状态持久化（异步）
+    if _pg_uri:
+        try:
+            from psycopg_pool import AsyncConnectionPool
+            from psycopg.rows import dict_row
+            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+            # AsyncPostgresSaver.from_conn_string 只用单连接（非池），
+            # 显式构造 AsyncConnectionPool 实现连接池化（连接上限见 ReliabilityConfig）。
+            _cp_pool = AsyncConnectionPool(
+                conninfo=_pg_uri,
+                min_size=reliability_config.pg_pool_min_size,
+                max_size=reliability_config.pg_pool_max_size,
+                kwargs={
+                    "autocommit": True,
+                    "prepare_threshold": 0,
+                    "row_factory": dict_row,
+                },
+            )
+            await _pg_exit_stack.enter_async_context(_cp_pool)
+            _cp = AsyncPostgresSaver(conn=_cp_pool)
+            await _cp.setup()
+            deps.fridge_checkpointer = _cp
+            logger.info("AsyncPostgresSaver 创建完成 (会话/HITL 状态持久化, 连接池)")
+        except Exception as e:
+            logger.warning(f"AsyncPostgresSaver 创建失败，回退到 InMemorySaver: {e}")
+            from langgraph.checkpoint.memory import InMemorySaver
+            deps.fridge_checkpointer = InMemorySaver()
+    else:
+        logger.warning("POSTGRES_URI 未配置，Checkpointer 回退到 InMemorySaver")
         from langgraph.checkpoint.memory import InMemorySaver
         deps.fridge_checkpointer = InMemorySaver()
 
@@ -178,6 +232,12 @@ async def lifespan(app: FastAPI):
             logger.info("OneNET Relay 已断开")
         except Exception as e:
             logger.warning(f"OneNET Relay 断开失败: {e}")
+    # 释放 PostgreSQL 连接池 (AsyncPostgresStore/AsyncPostgresSaver)
+    try:
+        await _pg_exit_stack.aclose()
+        logger.info("PostgreSQL 连接池已释放")
+    except Exception as e:
+        logger.warning(f"PostgreSQL 连接池释放失败: {e}")
     logger.info("=== FridgeAI 后端关闭 ===")
 
 
@@ -222,20 +282,44 @@ app.include_router(detail_router, prefix="/api/recipes", tags=["详情"], depend
 app.include_router(substitutions_router, prefix="/api/recipes", tags=["替换建议"], dependencies=_auth)
 
 
-@app.get("/api/health-public")
-def health_public():
-    """公开健康检查端点 (无需 API Key, 供 Docker/负载均衡器使用)"""
+def _build_health_response():
+    """P2-A: 构建完整健康状态 — 包含所有子系统和中间件自检。"""
+    import api.dependencies as deps
+
+    agent_ok = deps.fridge_agent is not None
+    graph_ok = deps.fridge_graph is not None
+    rag_ok = deps.rag_system is not None and deps.rag_system.system_ready
+    store_ok = deps.fridge_store is not None
+
+    # 中间件运行时自检 (P2-B)
+    middleware_status = {}
+    if agent_ok and hasattr(deps.fridge_agent, 'middleware'):
+        for mw in deps.fridge_agent.middleware:
+            if hasattr(mw, 'describe'):
+                middleware_status[mw.__class__.__name__] = mw.describe()
+
+    all_critical = all([agent_ok, graph_ok, store_ok])
     return {
-        "status": "ok",
+        "status": "ok" if all_critical else "degraded",
+        "components": {
+            "agent": "ok" if agent_ok else "error",
+            "graph": "ok" if graph_ok else "error",
+            "rag": "ok" if rag_ok else "degraded",
+            "store": "ok" if store_ok else "error",
+        },
         "recipes_count": len(recipe_db),
         "index_size": len(inverted_index),
+        "middleware": middleware_status,
     }
+
+
+@app.get("/api/health-public")
+def health_public():
+    """公开健康检查 (无需 API Key)。P2-A: 含子系统和中间件状态。"""
+    return _build_health_response()
 
 
 @app.get("/api/health", dependencies=[Depends(verify_api_key)])
 def health():
-    return {
-        "status": "ok",
-        "recipes_count": len(recipe_db),
-        "index_size": len(inverted_index),
-    }
+    """内部健康检查 (需 API Key)。P2-A: 含完整中间件自检详情。"""
+    return _build_health_response()

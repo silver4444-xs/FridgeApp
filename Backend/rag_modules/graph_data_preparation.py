@@ -5,23 +5,21 @@
 import logging
 import json
 from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
 
+from pydantic import BaseModel
 from neo4j import GraphDatabase
 from langchain_core.documents import Document
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class GraphNode:
+class GraphNode(BaseModel):
     """图节点数据结构"""
     node_id: str
     labels: List[str]
     name: str
     properties: Dict[str, Any]
 
-@dataclass
-class GraphRelation:
+class GraphRelation(BaseModel):
     """图关系数据结构"""
     start_node_id: str
     end_node_id: str

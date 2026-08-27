@@ -289,7 +289,7 @@ def fetch_all(data_dir: Path, dry_run: bool = False):
 
 
 if __name__ == "__main__":
-    data_path = ROOT / "Frontend" / "data" / "dishes"
+    data_path = ROOT / "Backend" / "data" / "dishes"
     if not data_path.exists():
         print("数据目录不存在: {}".format(data_path))
         sys.exit(1)

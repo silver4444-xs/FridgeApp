@@ -11,6 +11,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from api.auth import verify_ws_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,8 @@ def set_on_connect_handler(handler):
 
 
 async def ws_fridge(websocket: WebSocket):
+    if not verify_ws_api_key(websocket):
+        return
     await websocket.accept()
     _clients.add(websocket)
     logger.info(f"[WS Relay] Client connected, total={len(_clients)}")

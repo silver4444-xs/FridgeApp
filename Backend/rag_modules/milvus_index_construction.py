@@ -84,17 +84,13 @@ class MilvusIndexConstructionModule:
             raise
     
     def _setup_embeddings(self):
-        """初始化嵌入模型"""
+        """初始化嵌入模型（离线加载，使用默认 ~/.cache/huggingface 缓存）"""
         logger.info(f"正在初始化嵌入模型: {self.model_name}")
-
-        cache_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".hf_cache")
-        os.makedirs(cache_dir, exist_ok=True)
 
         self.embeddings = HuggingFaceEmbeddings(
             model_name=self.model_name,
-            model_kwargs={'device': 'cpu'},
+            model_kwargs={'device': 'cpu', 'local_files_only': True},
             encode_kwargs={'normalize_embeddings': True},
-            cache_folder=cache_dir,
         )
 
         logger.info("嵌入模型初始化完成")
@@ -207,13 +203,14 @@ class MilvusIndexConstructionModule:
             logger.error(f"创建索引失败: {e}")
             return False
     
-    def build_vector_index(self, chunks: List[Document]) -> bool:
+    def build_vector_index(self, chunks: List[Document], force_recreate: bool = False) -> bool:
         """
         构建向量索引
-        
+
         Args:
             chunks: 文档块列表
-            
+            force_recreate: 是否强制重建已存在的集合
+
         Returns:
             是否构建成功
         """
