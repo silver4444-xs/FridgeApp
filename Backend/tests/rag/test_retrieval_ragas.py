@@ -9,7 +9,7 @@ RAG 系统通过 conftest.py 的 init_rag_system fixture (session scope) 在测�
 数据: 从 eval_data/golden_dataset.json 加载 50 条基于项目实际菜谱文件人工标注的问答对。
 框架: Ragas (ContextPrecision/Recall/Faithfulness/AnswerRelevancy/AnswerCorrectness)。
 """
-import os, json, pytest
+import os, json, logging, pytest
 from pathlib import Path
 from datasets import Dataset
 

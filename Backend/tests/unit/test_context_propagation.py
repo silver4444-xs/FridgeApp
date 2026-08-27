@@ -18,7 +18,9 @@ class TestFridgeContext:
             current_inventory=[{"name": "鸡蛋", "qty": 1, "cat": "肉蛋"}], user_id="u1")
         import json
         r = json.loads(get_fridge_inventory.func(runtime))
-        assert r["items"][0]["name"] == "鸡蛋"
+        # P1-2 起所有工具统一返回 ToolResponse: {success, data, error, message}
+        assert r["success"] is True
+        assert r["data"]["items"][0]["name"] == "鸡蛋"
 
 
 # ─── Agent 创建: 3种模式 (basic/context/subagents) 均能成功实例化 ───
