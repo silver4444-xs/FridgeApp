@@ -4,6 +4,7 @@
 
 **"冰箱里有什么？帮我推荐几道菜" — 一句话，AI 全搞定**
 
+[![CI](https://img.shields.io/github/actions/workflow/status/silver4444-xs/FridgeApp/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/silver4444-xs/FridgeApp/actions/workflows/ci.yml)
 [![GitHub Stars](https://img.shields.io/github/stars/silver4444-xs/FridgeApp?style=for-the-badge&color=fbbf24)](https://github.com/silver4444-xs/FridgeApp/stargazers)
 [![License](https://img.shields.io/github/license/silver4444-xs/FridgeApp?style=for-the-badge&color=22c55e)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python)](https://www.python.org/)
@@ -49,7 +50,8 @@ FridgeAI 是一个开源的全栈 AI 应用，将普通智能冰箱升级为懂�
 | 服务 | 版本 | 是否必须 | 用途 |
 |---------|---------|----------|---------|
 | Python | 3.12+ | 必须 | 后端运行时 |
-| Conda | 任意版本 | 推荐 | 环境管理 |
+| [uv](https://docs.astral.sh/uv/) | 0.5+ | 推荐 | 依赖管理（`uv.lock` 保证可复现安装） |
+| Conda | 任意版本 | 可选 | 备选环境管理方案 |
 | Neo4j | 5.x | 必须 | GraphRAG 知识图谱 |
 | Milvus | 2.3+ | 必须 | 向量检索 |
 | DeepSeek API Key | — | 必须 | 大模型（在 [platform.deepseek.com](https://platform.deepseek.com) 获取） |
@@ -61,17 +63,32 @@ FridgeAI 是一个开源的全栈 AI 应用，将普通智能冰箱升级为懂�
 # ① 克隆项目并安装依赖
 git clone https://github.com/silver4444-xs/FridgeApp.git
 cd FridgeApp/Backend
-conda create -n cook-rag-1 python=3.12 -y && conda activate cook-rag-1
-pip install -r requirements.txt
+uv sync                      # 依照 uv.lock 精确复现依赖树
 
 # ② 配置环境变量
 cp .env.example .env
 # 编辑 .env 填入: DEEPSEEK_API_KEY, NEO4J_URI/PASSWORD, MILVUS_HOST
 
 # ③ 启动服务
-uvicorn api.server:app --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn api.server:app --host 0.0.0.0 --port 8000 --reload
 # 浏览器打开 http://localhost:8000/docs 查看 Swagger API 文档
 ```
+
+<details>
+<summary>备选：使用 Conda / pip 安装</summary>
+
+```bash
+cd FridgeApp/Backend
+conda create -n cook-rag-1 python=3.12 -y && conda activate cook-rag-1
+pip install -r requirements.txt
+# 之后的 ②③ 步同上，但去掉命令前的 uv run
+uvicorn api.server:app --host 0.0.0.0 --port 8000 --reload
+```
+
+> `requirements.txt` 由 `pyproject.toml` 派生并保留以兼容 pip 工作流；
+> **依赖真源是 `pyproject.toml` + `uv.lock`**，两者出现分歧时以后者为准。
+
+</details>
 
 **前端：** 用 HBuilderX 打开 `Frontend/` 目录，配置好 API 地址后运行到设备或模拟器。
 
@@ -404,15 +421,21 @@ FridgeApp/
 │   │   ├── tools.py                # 8 个 @tool + FridgeContext
 │   │   ├── subagents.py            # 3 个专业子 Agent
 │   │   ├── graph.py                # LangGraph StateGraph
+│   │   ├── middleware.py           # 中间件栈（熔断 / 输入护栏 / 可观测性）
 │   │   ├── models.py               # Pydantic 数据模型
 │   │   └── routes/                 # REST 路由
+│   ├── data/dishes/                # 📦 323 道菜谱（Markdown + 配图）
 │   ├── matching/                   # 倒排索引 + 模糊匹配
 │   ├── rag_modules/                # Neo4j + Milvus + 混合检索
+│   │   └── reranker.py             # Jina Reranker API 精排
 │   ├── prompts/                    # ChatPromptTemplate 提示词模板
-│   ├── tests/                      # 单元 + Ragas + DeepEval 测试
+│   ├── tests/                      # 按外部依赖分层，见「测试」一节
 │   ├── main.py                     # RAG 系统初始化 + Agent 工厂函数
-│   └── config.py                   # GraphRAGConfig 全局配置
+│   ├── config.py                   # GraphRAGConfig 全局配置
+│   ├── pyproject.toml              # 依赖真源 + ruff 配置
+│   └── uv.lock                     # 锁定依赖树，保证可复现安装
 │
+├── .github/workflows/ci.yml        # CI：lint + 单元测试
 └── docs/                           # 项目文档
 ```
 
@@ -466,7 +489,7 @@ FridgeAI 用 AI Agent + GraphRAG 理解你的食材和偏好，以自然语言�
 <details>
 <summary><b>怎么添加自己的菜谱？</b></summary>
 
-参照模板格式，在 `Backend/data/dishes/` 和 `Frontend/data/dishes/` 下添加 Markdown 文件，重启服务后自动索引。
+参照模板格式，在 `Backend/data/dishes/` 下添加 Markdown 文件，重启服务后自动索引。
 </details>
 
 <details>
@@ -475,6 +498,31 @@ FridgeAI 用 AI Agent + GraphRAG 理解你的食材和偏好，以自然语言�
 目前处于活跃开发阶段（Phase 8 已完成）。
 </details>
 
+
+## 🧪 测试
+
+测试按**外部依赖**分层，用 pytest marker 区分（定义见 `Backend/tests/pytest.ini`）。
+CI 只运行 `unit` 层——其余分层需要 Neo4j、Milvus 或真实 LLM Key，放进 CI 只会长期飘红。
+
+| 分层 | 外部依赖 | 命令 |
+|------|----------|------|
+| `unit` | 无 | `uv run pytest tests/unit` |
+| `rag` | Neo4j + Milvus + 评测 LLM | `uv run pytest tests/rag` |
+| `agent` | DeepEval + 评测 LLM | `uv run pytest tests/agent` |
+| `integration` | 后端服务需运行中 | `uv run pytest tests/integration` |
+| `e2e` | 全栈（含前端） | `uv run pytest tests/e2e` |
+
+```bash
+cd Backend
+uv run pytest tests/unit      # CI 所跑的那一层，无需任何外部服务
+uv run pytest -m "not slow"   # 跳过耗时用例
+uv run ruff check .           # 代码检查
+```
+
+> 运行 `rag` / `agent` 层前，请确保 Neo4j 与 Milvus 已启动，且 `.env` 中已配置真实的
+> `DEEPSEEK_API_KEY`。这些分层会真实调用 LLM，**会产生 API 费用**。
+
+---
 
 ## 🤝 参与贡献
 
