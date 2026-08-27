@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# 同一分支的新推送会取消尚在排队的旧运行
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend · lint + 单元测试
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: Backend
+
+    env:
+      # 单元测试不触达 Neo4j / Milvus / LLM，任何一个哑值都不会被真正使用。
+      # 之所以仍要注入，是因为 main.py 在模块导入期会读取配置，缺失即报错。
+      # 需要真实服务的 rag / agent / integration / e2e 分层不在 CI 内运行，
+      # 本地运行方式见 README「测试」一节。
+      DEEPSEEK_API_KEY: ci-dummy-not-a-real-key
+      NEO4J_URI: bolt://localhost:7687
+      NEO4J_PASSWORD: ci-dummy-not-a-real-key
+      API_KEY: ci-dummy-not-a-real-key
+      POSTGRES_URI: postgresql://ci:ci@localhost:5432/ci
+      HF_HUB_OFFLINE: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: Backend/uv.lock
+
+      - name: 安装依赖
+        run: uv sync --group dev
+
+      # ── 阻塞门禁：只拦「会让程序真的崩掉」的错误 ──
+      # E9=语法/运行时错误  F63=无效比较  F7=语法结构错误  F82=未定义名
+      - name: Ruff · 阻塞门禁
+        run: uv run ruff check . --select E9,F63,F7,F82
+
+      # ── 非阻塞：风格与未使用导入等技术债，仅作可见性报告 ──
+      # 规则集见 pyproject.toml 的 [tool.ruff.lint]
+      - name: Ruff · 全量检查（非阻塞）
+        continue-on-error: true
+        run: uv run ruff check . --output-format github
+
+      - name: Pytest · 单元测试
+        run: uv run pytest tests/unit
