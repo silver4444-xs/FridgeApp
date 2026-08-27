@@ -47,7 +47,7 @@
 					:class="{ active: activeTab === tab.key }"
 					@click="switchTab(tab.key)"
 				>
-					<text class="material-icons tab-icon">{{ tab.icon }}</text>
+					<text class="material-icons tab-icon" :style="tab.key === 'favorites' && favoriteRecipes.length > 0 ? 'color:#ef4444' : ''">{{ tab.icon }}</text>
 					<text class="tab-label">{{ tab.label }}</text>
 				</view>
 			</view>
@@ -75,6 +75,9 @@
 								<view class="card-h-badge" :class="getMatchLevel(recipe)">
 									<text>{{ recipe.matchCount }}/{{ recipe.ingredients.length }}种</text>
 								</view>
+								<view class="card-fav-btn" :class="{ active: store.isFavorite(recipe.id) }" @click.stop="store.toggleFavorite(recipe.id)">
+									<text class="material-icons">{{ store.isFavorite(recipe.id) ? 'favorite' : 'favorite_border' }}</text>
+								</view>
 							</view>
 							<view class="card-h-body">
 								<text class="card-h-name">{{ recipe.name }}</text>
@@ -98,7 +101,12 @@
 							class="card-v"
 							@click="openRecipe(recipe)"
 						>
-							<image :src="recipe.image" mode="aspectFill" class="card-v-img" />
+							<view class="card-v-img-wrap">
+								<image :src="recipe.image" mode="aspectFill" class="card-v-img" />
+								<view class="card-fav-btn" :class="{ active: store.isFavorite(recipe.id) }" @click.stop="store.toggleFavorite(recipe.id)">
+									<text class="material-icons">{{ store.isFavorite(recipe.id) ? 'favorite' : 'favorite_border' }}</text>
+								</view>
+							</view>
 							<view class="card-v-body">
 								<text class="card-v-name">{{ recipe.name }}</text>
 								<view class="card-v-ingredients">
@@ -193,7 +201,12 @@
 						class="card-v"
 						@click="openRecipe(r)"
 					>
-						<image :src="r.image || fallbackImg" mode="aspectFill" class="card-v-img" />
+						<view class="card-v-img-wrap">
+							<image :src="r.image || fallbackImg" mode="aspectFill" class="card-v-img" />
+							<view class="card-fav-btn" :class="{ active: store.isFavorite(r.id) }" @click.stop="store.toggleFavorite(r.id)">
+								<text class="material-icons">{{ store.isFavorite(r.id) ? 'favorite' : 'favorite_border' }}</text>
+							</view>
+						</view>
 						<view class="card-v-body">
 							<text class="card-v-name">{{ r.name }}</text>
 							<view class="card-v-footer">
@@ -212,7 +225,12 @@
 						class="card-v"
 						@click="openRecipe(r)"
 					>
-						<image :src="r.image" mode="aspectFill" class="card-v-img" />
+						<view class="card-v-img-wrap">
+							<image :src="r.image" mode="aspectFill" class="card-v-img" />
+							<view class="card-fav-btn" :class="{ active: store.isFavorite(r.id) }" @click.stop="store.toggleFavorite(r.id)">
+								<text class="material-icons">{{ store.isFavorite(r.id) ? 'favorite' : 'favorite_border' }}</text>
+							</view>
+						</view>
 						<view class="card-v-body">
 							<text class="card-v-name">{{ r.name }}</text>
 							<view class="card-v-ingredients">
@@ -265,7 +283,12 @@
 						class="card-v"
 						@click="openRecipe(recipe)"
 					>
-						<image :src="recipe.image" mode="aspectFill" class="card-v-img" />
+						<view class="card-v-img-wrap">
+							<image :src="recipe.image" mode="aspectFill" class="card-v-img" />
+							<view class="card-fav-btn" :class="{ active: store.isFavorite(recipe.id) }" @click.stop="store.toggleFavorite(recipe.id)">
+								<text class="material-icons">{{ store.isFavorite(recipe.id) ? 'favorite' : 'favorite_border' }}</text>
+							</view>
+						</view>
 						<view class="card-v-body">
 							<text class="card-v-name">{{ recipe.name }}</text>
 							<view class="card-v-ingredients">
@@ -299,6 +322,55 @@
 				</view>
 			</view>
 
+			<!-- ===== Tab 4: 收藏 ===== -->
+			<view v-show="activeTab === 'favorites'">
+				<!-- Recipe Grid -->
+				<view v-if="favoriteRecipes.length > 0" class="recipe-grid">
+					<view
+						v-for="recipe in favoriteRecipes"
+						:key="recipe.id"
+						class="card-v"
+						@click="openRecipe(recipe)"
+					>
+						<view class="card-v-img-wrap">
+							<image :src="recipe.image" mode="aspectFill" class="card-v-img" />
+							<view class="card-fav-btn active" @click.stop="store.toggleFavorite(recipe.id)">
+								<text class="material-icons">favorite</text>
+							</view>
+						</view>
+						<view class="card-v-body">
+							<text class="card-v-name">{{ recipe.name }}</text>
+							<view class="card-v-ingredients">
+								<text
+									v-for="ing in recipe.ingredients.slice(0, 4)"
+									:key="ing"
+									class="ing-chip"
+									:class="{ owned: isIngredientOwnedInRecipe(recipe, ing) }"
+								>{{ ing }}</text>
+								<text v-if="recipe.ingredients.length > 4" class="ing-more">+{{ recipe.ingredients.length - 4 }}</text>
+							</view>
+							<view class="card-v-footer">
+								<view class="match-tag" :class="getMatchLevel(recipe)">
+									<text>{{ recipe.matchCount }}/{{ recipe.ingredients.length }} 种</text>
+								</view>
+								<view class="card-v-meta">
+									<text>{{ recipe.time }}</text>
+									<text class="meta-sep">·</text>
+									<text>{{ recipe.difficulty }}</text>
+								</view>
+							</view>
+						</view>
+					</view>
+				</view>
+
+				<!-- Empty -->
+				<view v-if="favoriteRecipes.length === 0" class="empty-state">
+					<text class="material-icons empty-icon">favorite_border</text>
+					<text class="empty-text">还没有收藏的菜谱</text>
+					<text class="empty-hint">浏览菜谱时点击心形图标即可收藏</text>
+				</view>
+			</view>
+
 			<!-- Agent Chat Box -->
 			<view class="chat-section">
 				<AgentChatBox ref="chatBox" />
@@ -316,7 +388,7 @@ import RecipeDetailModal from '@/components/recipes/RecipeDetailModal.vue'
 import AgentChatBox from '@/components/recipes/AgentChatBox.vue'
 
 import { getRecipeImage, FALLBACK_RECIPE } from '@/utils/imageResolver.js'
-import { getApiUrl } from '@/config/app.js'
+import { getApiUrl, getApiHeaders } from '@/config/app.js'
 
 function getApiBase() {
 	return getApiUrl('')
@@ -602,11 +674,13 @@ export default {
 				{ key: 'recommend', label: 'AI 推荐', icon: 'stars' },
 				{ key: 'search', label: '搜索', icon: 'search' },
 				{ key: 'all', label: '全部食谱', icon: 'apps' },
+				{ key: 'favorites', label: '收藏', icon: 'favorite' },
 			],
 		}
 	},
 	computed: {
 		ownedKeywords() { return [...buildOwnedKeywords()] },
+		store() { return store },
 		totalFoods() { return store.totalCount },
 
 		isServerMode() { return this.recommendRecipes.length > 0 },
@@ -636,6 +710,10 @@ export default {
 
 		moreMatches() {
 			return this.matchedRecipes.filter(r => r.matchCount >= 1).slice(6)
+		},
+
+		favoriteRecipes() {
+			return this.allRecipes.filter(r => store.isFavorite(r.id))
 		},
 
 		filteredRecipes() {
@@ -669,7 +747,8 @@ export default {
 					url: getApiBase() + '/recipes/recommend',
 					method: 'POST',
 					data: payload,
-					timeout: 10000
+					timeout: 10000,
+					header: getApiHeaders()
 				})
 				if (res.statusCode === 200 && res.data && res.data.recipes) {
 					this.recommendRecipes = res.data.recipes.map(r => ({
@@ -705,7 +784,8 @@ export default {
 					url: getApiBase() + '/recipes/recommend',
 					method: 'POST',
 					data: payload,
-					timeout: 10000
+					timeout: 10000,
+					header: getApiHeaders()
 				})
 				if (res.statusCode === 200 && res.data && res.data.recipes) {
 					this.ingredientResults = res.data.recipes.map(r => ({
@@ -734,7 +814,8 @@ export default {
 				const res = await uni.request({
 					url: getApiBase() + "/recipes/search?q=" + encodeURIComponent(q) + "&limit=20",
 					method: "GET",
-					timeout: 10000
+					timeout: 10000,
+					header: getApiHeaders()
 				})
 				if (res.statusCode === 200 && res.data && res.data.results) {
 					this.searchResults = res.data.results.map(r => ({
@@ -761,7 +842,8 @@ export default {
 				const res = await uni.request({
 					url: getApiBase() + '/recipes/' + recipe.id,
 					method: 'GET',
-					timeout: 10000
+					timeout: 10000,
+					header: getApiHeaders()
 				})
 				if (res.statusCode === 200 && res.data) {
 					const detail = res.data
@@ -1073,6 +1155,38 @@ export default {
 .meta-sep {
 	color: #484f58;
 	margin: 0 2px;
+}
+
+/* ===== Favorite Button ===== */
+.card-fav-btn {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	background: rgba(0, 0, 0, 0.4);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 5;
+	transition: all 0.2s ease;
+}
+.card-fav-btn .material-icons {
+	font-size: 18px !important;
+	color: rgba(255, 255, 255, 0.6);
+}
+.card-fav-btn.active .material-icons {
+	color: #ef4444;
+}
+.card-fav-btn:active {
+	transform: scale(1.15);
+}
+
+.card-v-img-wrap {
+	position: relative;
 }
 
 /* ===== Recipe Grid (2 cols) ===== */

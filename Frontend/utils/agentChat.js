@@ -10,7 +10,8 @@ import { getWsUrl } from '@/config/app.js'
 
 let wsTask = null
 let reconnectTimer = null
-const listeners = { token: [], toolStart: [], toolEnd: [], toolError: [], done: [], error: [] }
+let _pendingMessages = []
+const listeners = { token: [], toolStart: [], toolEnd: [], toolError: [], interrupt: [], done: [], error: [] }
 
 function getChatWsUrl() {
 	return getWsUrl('/ws/chat')
@@ -39,6 +40,12 @@ export function connectAgentChat() {
 		wsTask.onOpen(() => {
 			console.log('[AgentChat] Connected')
 			store.agentChatConnected = true
+				// P2 #19: send queued messages (replaces setTimeout hack)
+				const queued = _pendingMessages.splice(0)
+				for (const msg of queued) {
+					wsTask.send({ data: JSON.stringify({ type: 'chat', message: msg.message, thread_id: msg.threadId }) })
+					console.log('[AgentChat] Sent queued:', msg.message.slice(0, 50))
+				}
 		})
 
 		wsTask.onMessage((res) => {
@@ -49,6 +56,7 @@ export function connectAgentChat() {
 					case 'stream_tool_start': _emit('toolStart', data); break
 					case 'stream_tool_end': _emit('toolEnd', data); break
 					case 'stream_tool_error': _emit('toolError', { tool: data.tool, error: data.error }); break
+					case 'stream_interrupt': _emit('interrupt', data); break
 					case 'stream_done': _emit('done'); break
 					case 'stream_error': _emit('error', data.error); break
 				}
@@ -78,11 +86,10 @@ export function sendAgentMessage(message, threadId) {
 		uni.setStorageSync('agent_thread_id', threadId)
 	}
 	if (!wsTask) {
+		// P2 #19: 消息排队 + onOpen 回调 (替代硬编码 1s setTimeout)
 		_emit('error', 'WebSocket 未连接，正在重连...')
+		_pendingMessages.push({ message, threadId })
 		connectAgentChat()
-		setTimeout(() => {
-			if (wsTask) wsTask.send({ data: JSON.stringify({ type: 'chat', message, thread_id: threadId }) })
-		}, 1000)
 		return
 	}
 	wsTask.send({ data: JSON.stringify({ type: 'chat', message, thread_id: threadId }) })

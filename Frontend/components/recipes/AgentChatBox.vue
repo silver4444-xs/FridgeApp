@@ -18,7 +18,7 @@
 		<scroll-view
 			class="chat-body"
 			scroll-y
-			:scroll-top="scrollTop"
+			:scroll-into-view="scrollIntoView"
 			:scroll-with-animation="!streaming"
 		>
 			<!-- Quick Actions -->
@@ -142,8 +142,14 @@
 				<view class="hitl-icon-wrap">
 					<text class="material-icons hitl-icon">verified_user</text>
 				</view>
-				<text class="hitl-title">保存偏好到长期记忆？</text>
-				<text class="hitl-desc">AI 会根据你的偏好提供更精准的推荐</text>
+				<text class="hitl-title">{{ hitlTitle }}</text>
+				<view v-if="interruptItems.length" class="hitl-list">
+					<view v-for="(item, i) in interruptItems" :key="i" class="hitl-row">
+						<text class="hitl-key">{{ item.key }}</text>
+						<text class="hitl-val">{{ item.val }}</text>
+					</view>
+				</view>
+				<text class="hitl-desc">{{ hitlDesc }}</text>
 				<view class="hitl-actions">
 					<view class="hitl-btn approve" @click="sendApprove">
 						<text class="material-icons" style="font-size:16px;">check</text>
@@ -157,6 +163,7 @@
 			</view>
 
 			<view style="height:8px;"></view>
+			<view id="chat-bottom" style="height:1px;"></view>
 		</scroll-view>
 
 		<!-- Input Bar -->
@@ -187,19 +194,6 @@ import { connectAgentChat, sendAgentMessage, onAgentChat, disconnectAgentChat, r
 import { store } from '@/utils/store.js'
 import { getRecipeImage, FALLBACK_RECIPE } from '@/utils/imageResolver.js'
 
-const TOOL_NAMES = {
-	recipe_expert: '正在搜索菜谱...',
-	substitution_expert: '正在查找替换方案...',
-	cooking_expert: '正在检索烹饪知识...',
-	recommend_by_fridge: '正在分析冰箱食材...',
-	search_recipes_by_ingredients: '正在搜索菜谱...',
-	get_recipe_detail: '正在获取菜谱详情...',
-	find_substitutions: '正在查找替换食材...',
-	search_cooking_knowledge: '正在检索知识库...',
-	get_fridge_inventory: '正在读取冰箱库存...',
-	save_user_preferences: '正在保存偏好...',
-	get_user_preferences: '正在读取偏好...',
-}
 
 const COLLAPSE_THRESHOLD = 500
 
@@ -211,6 +205,24 @@ function parseInlines(text) {
 		if (/^`.*`$/.test(part)) return { type: 'code', text: part.slice(1, -1) }
 		return { type: 'text', text: part }
 	})
+}
+
+// HITL 审批卡片: 把 save_user_preferences 的入参渲染成可读清单。
+// preferences 的 key 本身就是中文（忌口/偏好菜系/人数/喜欢的食材），无需映射表。
+function formatPrefValue(key, raw) {
+	if (Array.isArray(raw)) return raw.filter(v => v !== null && v !== undefined && v !== '').join('、')
+	if (raw === null || raw === undefined) return ''
+	if (typeof raw === 'number' && key.indexOf('人数') !== -1) return raw + ' 人'
+	if (typeof raw === 'object') return JSON.stringify(raw)
+	return String(raw)
+}
+
+function formatPreferenceItems(args) {
+	const prefs = args && args.preferences
+	if (!prefs || typeof prefs !== 'object' || Array.isArray(prefs)) return []
+	return Object.keys(prefs)
+		.map(key => ({ key: key, val: formatPrefValue(key, prefs[key]) }))
+		.filter(item => item.val !== '')
 }
 
 function parseMessage(text) {
@@ -272,30 +284,35 @@ export default {
 		return {
 			input: '',
 			streaming: false,
+			streamBlocks: [],
+			_lastParsedLen: 0,
 			streamText: '',
 			toolStatus: '',
 			messages: [],
 			threadId: '',
 			interruptVisible: false,
-			scrollTop: 0,
+			interruptItems: [],
+			scrollIntoView: '',
 		}
 	},
 	computed: {
 		connected() { return store.agentChatConnected },
-		streamBlocks() { return parseMessage(this.streamText) },
+		// 取不到待保存内容时（旧后端 / 非偏好类中断）回退为通用文案，卡片不会变空
+		hitlTitle() { return this.interruptItems.length ? '保存以下偏好到长期记忆？' : '保存偏好到长期记忆？' },
+		hitlDesc() { return this.interruptItems.length ? '保存后跨会话生效，可随时修改' : 'AI 会根据你的偏好提供更精准的推荐' },
 	},
 	mounted() {
 		this.threadId = uni.getStorageSync('agent_thread_id') || ''
 		onAgentChat('token', (t) => {
-			this.streamText += t
+			this.streamText += t; this._updateStreamBlocks()
 			this.$nextTick(() => { this.scrollToBottom() })
 		})
 		onAgentChat('toolStart', (d) => {
-			this.toolStatus = TOOL_NAMES[d.tool] || ('正在调用 ' + d.tool)
+			this.toolStatus = d.label || d.tool
 		})
 		onAgentChat('toolEnd', () => { this.toolStatus = '' })
 		onAgentChat('toolError', (d) => {
-			const label = TOOL_NAMES[d.tool] || d.tool
+			const label = d.label || d.tool
 			this.toolStatus = label + ' 失败: ' + (d.error || '').slice(0, 60)
 			setTimeout(() => { this.toolStatus = '' }, 5000)
 		})
@@ -310,24 +327,28 @@ export default {
 				})
 			}
 			this.streamText = ''
+			this.streamBlocks = []
+			this._lastParsedLen = 0
 			this.streaming = false
 			this.toolStatus = ''
-			this.interruptVisible = false
 			this.$nextTick(() => { this.scrollToBottom() })
 		})
 		onAgentChat('error', (err) => {
 			this.toolStatus = '错误: ' + err
 			this.streaming = false
 		})
-		onAgentChat('toolStart', (d) => {
-			if (d.tool === 'save_user_preferences') { this.interruptVisible = true }
+		onAgentChat('interrupt', (d) => {
+			// P1 修复: 用 interrupt_type 替代硬编码 tool 名判断
+			if (d.interrupt_type === 'hitl') {
+				this.interruptItems = formatPreferenceItems(d.args)
+				this.interruptVisible = true
+			}
 		})
 		connectAgentChat()
 	},
 	watch: {
 		'store.agentChatConnected'(val) {
 			if (!val && this.streaming) {
-				this.streaming = false
 				this.toolStatus = '连接断开，正在重连...'
 			}
 		},
@@ -340,14 +361,25 @@ export default {
 			this.messages.push({ role: 'user', text: msg })
 			this.input = ''
 			this.streamText = ''
+			this.streamBlocks = []
+			this._lastParsedLen = 0
 			this.streaming = true
+			this.interruptVisible = false
+			this.interruptItems = []
 			this.toolStatus = '思考中...'
 			this.$nextTick(() => { this.scrollToBottom() })
 			sendAgentMessage(msg, this.threadId)
 		},
 		sendQuick(msg) { this.input = msg; this.send() },
-		sendApprove() { this.interruptVisible = false; resumeAgentChat(this.threadId, 'approve') },
-		sendReject() { this.interruptVisible = false; resumeAgentChat(this.threadId, 'reject') },
+		sendApprove() { this.interruptVisible = false; this.interruptItems = []; resumeAgentChat(this.threadId, 'approve') },
+		sendReject() { this.interruptVisible = false; this.interruptItems = []; resumeAgentChat(this.threadId, 'reject') },
+		_updateStreamBlocks() {
+			const text = this.streamText;
+			if (text.length - this._lastParsedLen > 80 || /\n/.test(text.slice(this._lastParsedLen))) {
+				this.streamBlocks = parseMessage(text);
+				this._lastParsedLen = text.length;
+			}
+		},
 		copyMsg(msg) {
 			uni.setClipboardData({ data: msg.text, showToast: false })
 			uni.showToast({ title: '已复制', icon: 'success', duration: 1500 })
@@ -357,8 +389,11 @@ export default {
 			this.$nextTick(() => { this.scrollToBottom() })
 		},
 		scrollToBottom() {
-			// 交替使用两个大值，确保每次调用都触发 scroll-view 滚动到底部
-			this.scrollTop = this.scrollTop > 99998 ? 99997 : 99999
+			// P2 #21: scroll-into-view 替代 scrollTop hack
+			this.$nextTick(() => {
+				this.scrollIntoView = 'chat-bottom'
+				this.$nextTick(() => { this.scrollIntoView = '' })
+			})
 		},
 	},
 }
@@ -552,6 +587,10 @@ export default {
 .hitl-icon { font-size: 20px !important; color: #00d4ff; }
 .hitl-title { font-size: 14px; font-weight: 700; color: #e0e0e0; display: block; }
 .hitl-desc { font-size: 12px; color: #8b949e; margin-top: 4px; display: block; }
+.hitl-list { margin-top: 10px; }
+.hitl-row { display: flex; align-items: flex-start; gap: 10px; padding: 5px 0; }
+.hitl-key { font-size: 12px; color: #8b949e; width: 68px; flex-shrink: 0; }
+.hitl-val { font-size: 13px; color: #e0e0e0; font-weight: 600; flex: 1; }
 .hitl-actions { display: flex; gap: 10px; margin-top: 14px; }
 .hitl-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 0; border-radius: 12px; font-size: 13px; font-weight: 700; transition: all 0.2s ease; }
 .hitl-btn.approve { background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.2); color: #22c55e; }

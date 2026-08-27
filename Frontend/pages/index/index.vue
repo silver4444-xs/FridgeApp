@@ -74,11 +74,19 @@
 import { getConfig } from '@/config/onenet.js'
 
 const ICON_MAP = {
-	temperature: '🌡',
+	temperature: '\u{1F321}',
 	freezer_temp: '❄️',
-	humidity: '💧',
-	door_status: '🚪',
+	humidity: '\u{1F4A7}',
+	door_status: '\u{1F6AA}',
 	power: '⚡',
+}
+
+const CARD_TYPE_MAP = {
+	temperature: 'temp',
+	freezer_temp: 'temp',
+	humidity: 'energy',
+	power: 'energy',
+	door_status: 'status',
 }
 
 export default {
@@ -120,6 +128,21 @@ export default {
 			this.loading = true
 			this.errorMsg = ''
 			try {
+				const config = getConfig()
+				if (!config.productId) {
+					this.dataList = []
+					return
+				}
+				const [err, res] = await uni.request({
+					url: `${config.baseUrl}/device/data/latest/${config.deviceName}`,
+					method: 'GET',
+					header: { 'Authorization': `version=${config.apiVersion}&res=products/${config.productId}&et=0&method=md5&sign=` },
+					data: {},
+				})
+				if (err) {
+					throw new Error(err.errMsg || '请求失败')
+				}
+				const result = (res && res.data) ? res.data : {}
 				this.dataList = result.sensorData ? Object.keys(result.sensorData).map(id => ({
 					id,
 					name: result.sensorData[id].name || id,
@@ -133,7 +156,32 @@ export default {
 				this.loading = false
 			}
 		},
-		
+		getIcon(id) {
+			return ICON_MAP[id] || '\u{1F4A1}'
+		},
+		getCardType(id) {
+			return CARD_TYPE_MAP[id] || 'default'
+		},
+		formatValue(item) {
+			if (item.value == null) return '--'
+			return String(item.value)
+		},
+		formatTime(time) {
+			if (!time) return ''
+			try {
+				const d = new Date(time)
+				return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`
+			} catch (_) {
+				return time
+			}
+		},
+		stopPolling() {
+			if (this.pollTimer) {
+				clearInterval(this.pollTimer)
+				this.pollTimer = null
+			}
+		},
+	}
 }
 </script>
 
